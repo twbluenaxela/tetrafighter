@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TetraFighter</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Start Screen -->
+    <div id="start-screen">
+        <h1>TETRAFIGHTER</h1>
+        <p class="subtitle">Connect. Absorb. Dominate.</p>
+        <button id="start-btn">START BATTLE</button>
+        <div id="start-controls">
+            WASD - Move &nbsp;|&nbsp; SPACE - Attract &nbsp;|&nbsp; SHIFT - Repel<br>
+            Mouse - Look Around &nbsp;|&nbsp; R - Rotate Piece
+        </div>
+    </div>
+
+    <!-- HUD -->
+    <div id="hud" style="display:none;">
+        <div id="hud-top">
+            <div class="team-info team-blue">
+                <span class="team-label">Blue Team</span>
+                <span class="team-score" id="blue-score">0</span>
+                <span class="piece-count" id="blue-pieces">Pieces: 5</span>
+            </div>
+            <div id="round-info">
+                <div class="round-number">TetraFighter</div>
+                <div class="timer" id="game-timer">2:00</div>
+            </div>
+            <div class="team-info team-red" style="text-align:right;">
+                <span class="team-label">Red Team</span>
+                <span class="team-score" id="red-score">0</span>
+                <span class="piece-count" id="red-pieces">Pieces: 5</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Battle Overlay -->
+    <div id="battle-overlay">
+        <div id="battle-title">CONNECTION BATTLE!</div>
+        <div id="battle-bars">
+            <div class="battle-bar-container">
+                <div id="battle-bar-player"></div>
+            </div>
+            <span id="battle-vs">VS</span>
+            <div class="battle-bar-container">
+                <div id="battle-bar-enemy"></div>
+            </div>
+        </div>
+        <div id="battle-hint">
+            Mash <kbd>SPACE</kbd> to attract! <kbd>SHIFT</kbd> to repel!
+        </div>
+    </div>
+
+    <!-- Game Over -->
+    <div id="game-over">
+        <h2 id="game-over-title">GAME OVER</h2>
+        <p class="result-text" id="game-over-text"></p>
+        <button id="restart-btn">PLAY AGAIN</button>
+    </div>
+
+    <!-- Notifications -->
+    <div id="notifications"></div>
+
+    <!-- Minimap -->
+    <div id="minimap">
+        <canvas id="minimap-canvas" width="160" height="160"></canvas>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
