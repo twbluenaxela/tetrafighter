@@ -321,6 +321,7 @@ export class TetraFighter {
             }
         });
         this.bodyRotation += dir * Math.PI / 2;
+        this.justRotated = true;
 
         // Rebuild body meshes
         this._rebuildBody();

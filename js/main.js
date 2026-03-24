@@ -4,6 +4,14 @@ import { checkConnection } from './battle.js';
 import { AIController } from './ai.js';
 import { UIManager } from './ui.js';
 import { SculptureBuilder } from './sculpture.js';
+import {
+    initPhysics, resetWorld, createBoundaries, createFighterBody,
+    removeFighterBody, rebuildColliders, setFighterVelocity,
+    teleportFighter, promoteToPlayer, stepAndSync, hasBody,
+} from './physics.js';
+
+// Initialize Rapier WASM before anything else
+await initPhysics();
 
 // ============================================================
 // GAME CONFIG
@@ -220,18 +228,23 @@ function respawnFighter(fighter) {
     fighter.velocity.set(0, 0, 0);
     fighter.isRunning = false;
     // Reset facing
-    fighter.group.rotation.y = fighter.direction === -1 ? Math.PI : 0;
+    const yAngle = fighter.direction === -1 ? Math.PI : 0;
+    fighter.group.rotation.y = yAngle;
+    // Teleport Rapier body to match
+    teleportFighter(fighter, x, z, yAngle);
 }
 
 function spawnReinforcements() {
     if (bluePieces.filter(p => p.alive).length < MAX_PIECES) {
         const bp = spawnPiece('blue');
         bluePieces.push(bp);
+        createFighterBody(bp);
         ui.notify('Blue reinforcement!');
     }
     if (redPieces.filter(p => p.alive).length < MAX_PIECES) {
         const rp = spawnPiece('red');
         redPieces.push(rp);
+        createFighterBody(rp);
     }
 }
 
@@ -244,8 +257,10 @@ window.addEventListener('keydown', (e) => {
     if (gameRunning && playerPiece && playerPiece.alive) {
         if (e.code === 'KeyQ') {
             playerPiece.rotateBody(-1); // CCW
+            rebuildColliders(playerPiece);
         } else if (e.code === 'KeyE') {
             playerPiece.rotateBody(1); // CW
+            rebuildColliders(playerPiece);
         }
     }
 });
@@ -310,18 +325,26 @@ function handlePlayerMovement(dt) {
 
     if (moveDir.length() > 0) {
         moveDir.normalize();
-        playerPiece.position.x += moveDir.x * speed * dt;
-        playerPiece.position.z += moveDir.z * speed * dt;
+        const vx = moveDir.x * speed;
+        const vz = moveDir.z * speed;
 
         // Track velocity for collision momentum checks
-        playerPiece.velocity.set(moveDir.x * speed, 0, moveDir.z * speed);
+        playerPiece.velocity.set(vx, 0, vz);
 
-        playerPiece.position.x = THREE.MathUtils.clamp(
-            playerPiece.position.x, FIELD_BOUNDS.minX + 1, FIELD_BOUNDS.maxX - 1
-        );
-        playerPiece.position.z = THREE.MathUtils.clamp(
-            playerPiece.position.z, FIELD_BOUNDS.minZ, FIELD_BOUNDS.maxZ
-        );
+        // Set Rapier velocity (physics handles position + wall clamping)
+        setFighterVelocity(playerPiece, vx, vz);
+
+        // Fallback for title screen (no Rapier body)
+        if (!hasBody(playerPiece)) {
+            playerPiece.position.x += vx * dt;
+            playerPiece.position.z += vz * dt;
+            playerPiece.position.x = THREE.MathUtils.clamp(
+                playerPiece.position.x, FIELD_BOUNDS.minX + 1, FIELD_BOUNDS.maxX - 1
+            );
+            playerPiece.position.z = THREE.MathUtils.clamp(
+                playerPiece.position.z, FIELD_BOUNDS.minZ, FIELD_BOUNDS.maxZ
+            );
+        }
 
         // Face movement direction
         const angle = Math.atan2(moveDir.x, moveDir.z);
@@ -334,6 +357,7 @@ function handlePlayerMovement(dt) {
         playerPiece.isRunning = false;
         playerPiece.isSprinting = false;
         playerPiece.velocity.set(0, 0, 0);
+        setFighterVelocity(playerPiece, 0, 0);
     }
 }
 
@@ -401,52 +425,6 @@ function updateShowcaseCamera(dt) {
 
     const lookAt = new THREE.Vector3(sculpturePos.x, sculpturePos.y + 2, sculpturePos.z);
     camera.lookAt(lookAt);
-}
-
-// ============================================================
-// PHYSICAL BODY COLLISION
-// ============================================================
-const BODY_RADIUS = 0.7; // Collision radius per fighter — small enough to allow contact
-
-/**
- * Hard position correction — if two fighters overlap, push them apart
- * instantly so bodies never clip through each other. Applies to ALL
- * pairs: teammates, enemies, and the player.
- */
-function handleAllBodyCollisions() {
-    const allPieces = [...bluePieces, ...redPieces].filter(p => p.alive);
-
-    for (let i = 0; i < allPieces.length; i++) {
-        for (let j = i + 1; j < allPieces.length; j++) {
-            const a = allPieces[i];
-            const b = allPieces[j];
-
-            const dx = a.position.x - b.position.x;
-            const dz = a.position.z - b.position.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-            const minDist = BODY_RADIUS * 2;
-
-            if (dist < minDist && dist > 0.001) {
-                // Hard separation — push apart by half the overlap each
-                const overlap = minDist - dist;
-                const nx = dx / dist;
-                const nz = dz / dist;
-
-                // Player gets less push so controls stay responsive
-                const aIsPlayer = a === playerPiece;
-                const bIsPlayer = b === playerPiece;
-                let aFactor = 0.5;
-                let bFactor = 0.5;
-                if (aIsPlayer) { aFactor = 0.2; bFactor = 0.8; }
-                if (bIsPlayer) { bFactor = 0.2; aFactor = 0.8; }
-
-                a.position.x += nx * overlap * aFactor;
-                a.position.z += nz * overlap * aFactor;
-                b.position.x -= nx * overlap * bFactor;
-                b.position.z -= nz * overlap * bFactor;
-            }
-        }
-    }
 }
 
 // ============================================================
@@ -542,6 +520,7 @@ function resolveConnection(pieceA, pieceB, result) {
         redScore++;
     }
 
+    removeFighterBody(loser);
     loser.destroy();
     respawnFighter(winner);
 }
@@ -598,6 +577,7 @@ function gameLoop() {
             playerPiece = alivePieces[0];
             playerPiece.isPlayerControlled = true;
             playerPiece.speed = 5.0;
+            promoteToPlayer(playerPiece);
             ui.notify('Switched to another fighter!');
         } else {
             playerPiece = null;
@@ -609,11 +589,23 @@ function gameLoop() {
     blueAI.update(dt, blueAIPieces, redPieces.filter(p => p.alive));
     redAI.update(dt, redPieces.filter(p => p.alive), bluePieces.filter(p => p.alive));
 
-    // Update all fighters
+    // Update all fighters (AI movement + animation)
     [...bluePieces, ...redPieces].forEach(p => p.update(dt, FIELD_BOUNDS));
 
-    // Physical collisions — bodies can't pass through each other
-    handleAllBodyCollisions();
+    // Apply AI velocities to Rapier + handle rotation rebuilds
+    [...bluePieces, ...redPieces].forEach(p => {
+        if (!p.alive || !hasBody(p)) return;
+        if (!p.isPlayerControlled) {
+            setFighterVelocity(p, p.velocity.x, p.velocity.z);
+        }
+        if (p.justRotated) {
+            rebuildColliders(p);
+            p.justRotated = false;
+        }
+    });
+
+    // Rapier physics step — handles body collisions + rotation push
+    stepAndSync(dt);
 
     // Connection check — if shapes fit together on contact, one dies
     checkHitboxCollisions();
@@ -665,6 +657,10 @@ function startGame() {
     scene.remove(sculptureBuilder.getSculpture('blue'));
     scene.remove(sculptureBuilder.getSculpture('red'));
 
+    // Reset physics world and create boundaries
+    resetWorld();
+    createBoundaries(FIELD_BOUNDS);
+
     gameRunning = true;
     showcaseMode = false;
     showcaseTimer = 0;
@@ -678,6 +674,11 @@ function startGame() {
     sculptureBuilder = new SculptureBuilder(scene, FIELD_BOUNDS);
 
     spawnInitialPieces();
+
+    // Create Rapier bodies for all fighters
+    [...bluePieces, ...redPieces].forEach(p => {
+        createFighterBody(p, p === playerPiece);
+    });
 
     ui.hideStartScreen();
     ui.hideGameOver();
