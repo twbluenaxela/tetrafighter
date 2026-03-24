@@ -249,10 +249,13 @@ window.addEventListener('keydown', (e) => {
         if (battle) {
             if (e.code === 'Space') {
                 e.preventDefault();
-                battle.playerAttract();
+                battle.playerLunge();
+            } else if (e.code === 'KeyQ') {
+                e.preventDefault();
+                battle.playerRotate(-1); // CCW
             } else if (e.code === 'KeyE') {
                 e.preventDefault();
-                battle.playerRepel();
+                battle.playerRotate(1); // CW
             }
         }
     }
@@ -291,7 +294,7 @@ function handlePlayerMovement(dt) {
 
     const moveDir = new THREE.Vector3();
     const forward = new THREE.Vector3(Math.sin(cameraAngle), 0, Math.cos(cameraAngle));
-    const right = new THREE.Vector3(Math.cos(cameraAngle), 0, -Math.sin(cameraAngle));
+    const right = new THREE.Vector3(Math.cos(cameraAngle), 0, Math.sin(cameraAngle));
 
     if (keys['KeyW']) moveDir.add(forward);
     if (keys['KeyS']) moveDir.sub(forward);
@@ -519,9 +522,8 @@ function gameLoop() {
     if (playerPiece && playerPiece.inBattle) {
         const battle = battleManager.getPlayerBattle(playerPiece);
         if (battle) {
-            const meters = battle.getMeterPercents();
-            const isA = battle.pieceA === playerPiece;
-            ui.showBattle(isA ? meters.a : meters.b, isA ? meters.b : meters.a);
+            const status = battle.getStatus();
+            ui.showBattleConnection(status);
         }
     } else {
         ui.hideBattle();

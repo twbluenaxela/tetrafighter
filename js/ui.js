@@ -60,14 +60,34 @@ export class UIManager {
         this.timer.textContent = `${m}:${s.toString().padStart(2, '0')}`;
     }
 
-    showBattle(meterA, meterB) {
+    showBattleConnection(status) {
         this.battleOverlay.classList.add('active');
-        this.battleBarPlayer.style.width = `${meterA}%`;
-        this.battleBarEnemy.style.width = `${meterB}%`;
+
+        // Show cooldown on the player bar as a recharge indicator
+        const cooldownPct = status.cooldownA > 0
+            ? Math.max(0, (1 - status.cooldownA / 0.8) * 100)
+            : 100;
+        this.battleBarPlayer.style.width = `${cooldownPct}%`;
+
+        // Time remaining
+        const timeLeft = Math.ceil(status.timeLeft);
+        this.battleBarEnemy.style.width = `${(status.timeLeft / 10) * 100}%`;
+
+        // Update title with status
+        const titleEl = document.getElementById('battle-title');
+        if (status.isLungingA) {
+            titleEl.textContent = 'LUNGING!';
+        } else if (status.cooldownA > 0) {
+            titleEl.textContent = 'RECHARGING...';
+        } else {
+            titleEl.textContent = `CONNECT! (${timeLeft}s)`;
+        }
     }
 
     hideBattle() {
         this.battleOverlay.classList.remove('active');
+        const titleEl = document.getElementById('battle-title');
+        if (titleEl) titleEl.textContent = 'CONNECTION BATTLE!';
     }
 
     showGameOver(blueWins, blueCount, redCount) {

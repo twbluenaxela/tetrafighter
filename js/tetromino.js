@@ -135,6 +135,11 @@ export class TetraFighter {
         // Animation state
         this.runPhase = Math.random() * Math.PI * 2;
         this.isRunning = false; // driven by actual movement
+        this.bodyRotation = 0; // cumulative body rotation in 90° increments
+
+        // Lunge state
+        this.isLunging = false;
+        this.lungeCooldown = 0;
 
         // Build the character
         this._buildCharacter();
@@ -243,11 +248,20 @@ export class TetraFighter {
             this.bodyGroup.position.y = 1.6 + Math.abs(Math.sin(this.runPhase * 2)) * 0.08;
             this.eyes.position.y = this.bodyGroup.position.y + 0.05;
         } else if (this.inBattle) {
-            const battleBob = Math.sin(Date.now() * 0.01) * 0.15;
-            this.leftArmPivot.rotation.x = -1.2 + battleBob;
-            this.rightArmPivot.rotation.x = -1.2 - battleBob;
-            this.leftLegPivot.rotation.x = 0.15;
-            this.rightLegPivot.rotation.x = -0.15;
+            if (this.isLunging) {
+                // Lunge pose — arms forward, body leaning
+                this.leftArmPivot.rotation.x = -1.8;
+                this.rightArmPivot.rotation.x = -1.8;
+                this.leftLegPivot.rotation.x = -0.4;
+                this.rightLegPivot.rotation.x = 0.4;
+            } else {
+                // Battle stance — arms ready, slight bob
+                const battleBob = Math.sin(Date.now() * 0.008) * 0.1;
+                this.leftArmPivot.rotation.x = -0.8 + battleBob;
+                this.rightArmPivot.rotation.x = -0.8 - battleBob;
+                this.leftLegPivot.rotation.x = 0.15;
+                this.rightLegPivot.rotation.x = -0.15;
+            }
         } else {
             // Idle — gently return limbs to rest
             this.leftLegPivot.rotation.x *= 0.9;
@@ -258,12 +272,18 @@ export class TetraFighter {
             this.eyes.position.y = 1.65;
         }
 
+        // Lunge cooldown
+        this.lungeCooldown = Math.max(0, this.lungeCooldown - dt);
+
         // Player-controlled pieces don't auto-move
         if (this.isPlayerControlled) {
-            // Only clamp + battle physics
             if (this.inBattle) {
+                // Apply lunge/bounce velocity
                 this.group.position.add(this.velocity.clone().multiplyScalar(dt));
-                this.velocity.multiplyScalar(0.9);
+                this.velocity.multiplyScalar(0.88);
+                if (this.velocity.length() < 0.1) this.velocity.set(0, 0, 0);
+
+                // Face opponent
                 if (this.battleTarget && this.battleTarget.alive) {
                     const angle = Math.atan2(
                         this.battleTarget.position.x - this.position.x,
@@ -328,18 +348,74 @@ export class TetraFighter {
         }
     }
 
-    applyRepel(targetPos) {
-        const dir = new THREE.Vector3().subVectors(this.position, targetPos).normalize();
-        this.velocity.add(dir.multiplyScalar(12));
+    /**
+     * Rotate the tetromino body 90° around Y axis.
+     * dir: 1 = clockwise (E key), -1 = counter-clockwise (Q key)
+     */
+    rotateBody(dir) {
+        const center = getBlockCenter(this.blocks);
+        this.blocks = this.blocks.map(([bx, by, bz]) => {
+            const rx = bx - center.x;
+            const rz = bz - center.z;
+            if (dir === 1) {
+                // CW: (x,z) -> (z, -x)
+                return [Math.round(rz + center.x), by, Math.round(-rx + center.z)];
+            } else {
+                // CCW: (x,z) -> (-z, x)
+                return [Math.round(-rz + center.x), by, Math.round(rx + center.z)];
+            }
+        });
+        this.bodyRotation += dir * Math.PI / 2;
+
+        // Rebuild body meshes
+        this._rebuildBody();
     }
 
-    applyAttract(targetPos) {
-        const dir = new THREE.Vector3().subVectors(targetPos, this.position).normalize();
-        this.velocity.add(dir.multiplyScalar(8));
+    _rebuildBody() {
+        // Remove old body meshes
+        while (this.bodyGroup.children.length > 0) {
+            const child = this.bodyGroup.children[0];
+            this.bodyGroup.remove(child);
+        }
+        // Rebuild
+        const center = getBlockCenter(this.blocks);
+        this.blocks.forEach(([bx, , bz]) => {
+            const mesh = createBlockMesh(this.teamColor);
+            mesh.position.set(
+                (bx - center.x) * BLOCK_SIZE,
+                0,
+                (bz - center.z) * BLOCK_SIZE
+            );
+            this.bodyGroup.add(mesh);
+        });
+    }
+
+    /**
+     * Get the world-space block positions for connection checking.
+     * Returns blocks projected onto the XZ plane relative to the fighter's world position,
+     * accounting for the fighter's Y-axis rotation.
+     */
+    getWorldBlocks() {
+        const center = getBlockCenter(this.blocks);
+        const angle = this.group.rotation.y;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+
+        return this.blocks.map(([bx, by, bz]) => {
+            const lx = (bx - center.x) * BLOCK_SIZE;
+            const lz = (bz - center.z) * BLOCK_SIZE;
+            // Rotate by group rotation
+            const wx = lx * cos + lz * sin;
+            const wz = -lx * sin + lz * cos;
+            // Snap to grid (half-block resolution)
+            return [
+                Math.round((this.position.x + wx) * 2) / 2,
+                Math.round((this.position.z + wz) * 2) / 2,
+            ];
+        });
     }
 
     setHighlight(on) {
-        // Glow effect on body blocks
         this.bodyGroup.children.forEach(mesh => {
             if (mesh.material) {
                 mesh.material.emissive.set(
@@ -350,7 +426,6 @@ export class TetraFighter {
         });
     }
 
-    // Return the shape data for the sculpture system
     getShapeData() {
         return {
             shapeKey: this.shapeKey,
