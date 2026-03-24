@@ -1,5 +1,5 @@
 /**
- * UI Manager — updates HUD, battle overlay, minimap, notifications
+ * UI Manager — HUD, battle overlay, minimap, notifications, game-over showcase
  */
 
 export class UIManager {
@@ -10,6 +10,8 @@ export class UIManager {
         this.bluePieces = document.getElementById('blue-pieces');
         this.redPieces = document.getElementById('red-pieces');
         this.timer = document.getElementById('game-timer');
+        this.blueArtCount = document.getElementById('blue-art-count');
+        this.redArtCount = document.getElementById('red-art-count');
 
         this.battleOverlay = document.getElementById('battle-overlay');
         this.battleBarPlayer = document.getElementById('battle-bar-player');
@@ -29,6 +31,10 @@ export class UIManager {
         this.hud.style.display = 'block';
     }
 
+    hideHUD() {
+        this.hud.style.display = 'none';
+    }
+
     hideStartScreen() {
         this.startScreen.style.display = 'none';
     }
@@ -39,8 +45,13 @@ export class UIManager {
     }
 
     updatePieceCounts(blueCount, redCount) {
-        this.bluePieces.textContent = `Pieces: ${blueCount}`;
-        this.redPieces.textContent = `Pieces: ${redCount}`;
+        this.bluePieces.textContent = `Fighters: ${blueCount}`;
+        this.redPieces.textContent = `Fighters: ${redCount}`;
+    }
+
+    updateArtCounts(blueArt, redArt) {
+        if (this.blueArtCount) this.blueArtCount.textContent = `Art: ${blueArt} shapes`;
+        if (this.redArtCount) this.redArtCount.textContent = `Art: ${redArt} shapes`;
     }
 
     updateTimer(secondsLeft) {
@@ -59,16 +70,20 @@ export class UIManager {
         this.battleOverlay.classList.remove('active');
     }
 
-    showGameOver(blueWins) {
+    showGameOver(blueWins, blueCount, redCount) {
         this.gameOver.classList.add('active');
         if (blueWins) {
-            this.gameOverTitle.textContent = 'VICTORY!';
+            this.gameOverTitle.textContent = 'BLUE TEAM WINS!';
             this.gameOverTitle.style.color = '#4fc3f7';
-            this.gameOverText.textContent = 'Blue team dominates the field!';
+            this.gameOverText.textContent = `Blue collected ${blueCount} shapes vs Red's ${redCount}. Admire the art!`;
+        } else if (blueCount === redCount) {
+            this.gameOverTitle.textContent = 'DRAW!';
+            this.gameOverTitle.style.color = '#aaaaaa';
+            this.gameOverText.textContent = `Both teams collected ${blueCount} shapes each!`;
         } else {
-            this.gameOverTitle.textContent = 'DEFEAT';
+            this.gameOverTitle.textContent = 'RED TEAM WINS!';
             this.gameOverTitle.style.color = '#ef5350';
-            this.gameOverText.textContent = 'Red team has overwhelmed you.';
+            this.gameOverText.textContent = `Red collected ${redCount} shapes vs Blue's ${blueCount}. Admire the art!`;
         }
     }
 
@@ -96,14 +111,11 @@ export class UIManager {
         const w = 160, h = 160;
         ctx.clearRect(0, 0, w, h);
 
-        // Background
         ctx.fillStyle = 'rgba(0,0,0,0.3)';
         ctx.fillRect(0, 0, w, h);
 
-        // Field area
         const fieldW = fieldBounds.maxX - fieldBounds.minX;
         const fieldH = fieldBounds.maxZ - fieldBounds.minZ;
-
         const scaleX = w / fieldW;
         const scaleZ = h / fieldH;
 
@@ -114,17 +126,21 @@ export class UIManager {
         ctx.lineTo(w, h / 2);
         ctx.stroke();
 
-        // Draw pieces
+        // Sculpture zones (side indicators)
+        ctx.fillStyle = 'rgba(79,195,247,0.1)';
+        ctx.fillRect(0, 0, 8, h);
+        ctx.fillStyle = 'rgba(239,83,80,0.1)';
+        ctx.fillRect(w - 8, 0, 8, h);
+
         const drawPiece = (piece, color, isPlayer) => {
             if (!piece.alive) return;
             const px = (piece.position.x - fieldBounds.minX) * scaleX;
             const pz = (piece.position.z - fieldBounds.minZ) * scaleZ;
 
             ctx.fillStyle = color;
-            const size = Math.max(3, Math.sqrt(piece.blocks.length) * 2.5);
+            const size = 3.5;
 
             if (isPlayer) {
-                // Player indicator - diamond
                 ctx.beginPath();
                 ctx.moveTo(px, pz - size - 1);
                 ctx.lineTo(px + size + 1, pz);
@@ -136,7 +152,9 @@ export class UIManager {
                 ctx.lineWidth = 1;
                 ctx.stroke();
             } else {
-                ctx.fillRect(px - size / 2, pz - size / 2, size, size);
+                ctx.beginPath();
+                ctx.arc(px, pz, size, 0, Math.PI * 2);
+                ctx.fill();
             }
         };
 

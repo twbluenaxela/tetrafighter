@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { Tetromino, randomShapeKey } from './tetromino.js';
+import { TetraFighter, randomShapeKey } from './tetromino.js';
 import { BattleManager } from './battle.js';
 import { AIController } from './ai.js';
 import { UIManager } from './ui.js';
+import { SculptureBuilder } from './sculpture.js';
 
 // ============================================================
 // GAME CONFIG
@@ -10,8 +11,8 @@ import { UIManager } from './ui.js';
 const FIELD_WIDTH = 24;
 const FIELD_LENGTH = 40;
 const PIECES_PER_TEAM = 5;
-const GAME_DURATION = 120; // seconds
-const SPAWN_INTERVAL = 12; // seconds between reinforcement spawns
+const GAME_DURATION = 120;
+const SPAWN_INTERVAL = 10;
 const MAX_PIECES = 8;
 
 const FIELD_BOUNDS = {
@@ -35,9 +36,8 @@ renderer.toneMappingExposure = 1.1;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a0a1a);
-scene.fog = new THREE.FogExp2(0x0a0a1a, 0.018);
+scene.fog = new THREE.FogExp2(0x0a0a1a, 0.012);
 
-// Camera — third person
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
 camera.position.set(0, 12, -14);
 camera.lookAt(0, 0, 5);
@@ -45,7 +45,7 @@ camera.lookAt(0, 0, 5);
 // ============================================================
 // LIGHTING
 // ============================================================
-const ambientLight = new THREE.AmbientLight(0x334466, 0.6);
+const ambientLight = new THREE.AmbientLight(0x445566, 0.7);
 scene.add(ambientLight);
 
 const dirLight = new THREE.DirectionalLight(0xffeedd, 1.2);
@@ -54,17 +54,17 @@ dirLight.castShadow = true;
 dirLight.shadow.mapSize.set(1024, 1024);
 dirLight.shadow.camera.near = 1;
 dirLight.shadow.camera.far = 60;
-dirLight.shadow.camera.left = -25;
-dirLight.shadow.camera.right = 25;
-dirLight.shadow.camera.top = 25;
-dirLight.shadow.camera.bottom = -25;
+dirLight.shadow.camera.left = -30;
+dirLight.shadow.camera.right = 30;
+dirLight.shadow.camera.top = 30;
+dirLight.shadow.camera.bottom = -30;
 scene.add(dirLight);
 
-const blueAccent = new THREE.PointLight(0x4fc3f7, 0.8, 30);
+const blueAccent = new THREE.PointLight(0x4fc3f7, 0.6, 30);
 blueAccent.position.set(-5, 5, -FIELD_LENGTH / 2 + 3);
 scene.add(blueAccent);
 
-const redAccent = new THREE.PointLight(0xef5350, 0.8, 30);
+const redAccent = new THREE.PointLight(0xef5350, 0.6, 30);
 redAccent.position.set(5, 5, FIELD_LENGTH / 2 - 3);
 scene.add(redAccent);
 
@@ -72,8 +72,8 @@ scene.add(redAccent);
 // FIELD / ARENA
 // ============================================================
 function createArena() {
-    // Ground
-    const groundGeo = new THREE.PlaneGeometry(FIELD_WIDTH + 4, FIELD_LENGTH + 4);
+    // Ground — wider to include sculpture areas
+    const groundGeo = new THREE.PlaneGeometry(FIELD_WIDTH + 40, FIELD_LENGTH + 10);
     const groundMat = new THREE.MeshPhongMaterial({
         color: 0x111122,
         specular: 0x222244,
@@ -84,12 +84,12 @@ function createArena() {
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // Grid lines
+    // Grid (field area only)
     const gridHelper = new THREE.GridHelper(Math.max(FIELD_WIDTH, FIELD_LENGTH) + 4, 40, 0x1a1a3a, 0x1a1a3a);
     gridHelper.position.y = 0.01;
     scene.add(gridHelper);
 
-    // Center line (glowing)
+    // Center line
     const centerLineGeo = new THREE.PlaneGeometry(FIELD_WIDTH, 0.15);
     const centerLineMat = new THREE.MeshBasicMaterial({ color: 0x444466, transparent: true, opacity: 0.6 });
     const centerLine = new THREE.Mesh(centerLineGeo, centerLineMat);
@@ -99,36 +99,29 @@ function createArena() {
 
     // Walls
     const wallMat = new THREE.MeshPhongMaterial({
-        color: 0x1a1a2e,
-        transparent: true,
-        opacity: 0.3,
-        specular: 0x4444ff,
+        color: 0x1a1a2e, transparent: true, opacity: 0.3, specular: 0x4444ff,
     });
-
     const wallH = 3;
-    // Side walls
+
+    // Side walls (further out to accommodate sculptures)
     [[-1, 0], [1, 0]].forEach(([side]) => {
         const wallGeo = new THREE.BoxGeometry(0.3, wallH, FIELD_LENGTH + 4);
         const wall = new THREE.Mesh(wallGeo, wallMat);
-        wall.position.set(side * (FIELD_WIDTH / 2 + 2), wallH / 2, 0);
+        wall.position.set(side * (FIELD_WIDTH / 2 + 22), wallH / 2, 0);
         scene.add(wall);
     });
 
     // End walls
     [[0, -1], [0, 1]].forEach(([, side]) => {
-        const wallGeo = new THREE.BoxGeometry(FIELD_WIDTH + 4, wallH, 0.3);
+        const wallGeo = new THREE.BoxGeometry(FIELD_WIDTH + 44, wallH, 0.3);
         const wall = new THREE.Mesh(wallGeo, wallMat);
         wall.position.set(0, wallH / 2, side * (FIELD_LENGTH / 2 + 2));
         scene.add(wall);
 
-        // Team color glow on end walls
         const glowColor = side === -1 ? 0x4fc3f7 : 0xef5350;
         const glowGeo = new THREE.PlaneGeometry(FIELD_WIDTH, wallH);
         const glowMat = new THREE.MeshBasicMaterial({
-            color: glowColor,
-            transparent: true,
-            opacity: 0.08,
-            side: THREE.DoubleSide,
+            color: glowColor, transparent: true, opacity: 0.08, side: THREE.DoubleSide,
         });
         const glow = new THREE.Mesh(glowGeo, glowMat);
         glow.position.set(0, wallH / 2, side * (FIELD_LENGTH / 2 + 1.8));
@@ -140,15 +133,24 @@ function createArena() {
         const zoneGeo = new THREE.PlaneGeometry(FIELD_WIDTH - 2, 4);
         const zoneColor = side === -1 ? 0x4fc3f7 : 0xef5350;
         const zoneMat = new THREE.MeshBasicMaterial({
-            color: zoneColor,
-            transparent: true,
-            opacity: 0.05,
+            color: zoneColor, transparent: true, opacity: 0.05,
         });
         const zone = new THREE.Mesh(zoneGeo, zoneMat);
         zone.rotation.x = -Math.PI / 2;
         zone.position.set(0, 0.015, side * (FIELD_LENGTH / 2 - 3));
         scene.add(zone);
     });
+
+    // Field boundary lines
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x333355, transparent: true, opacity: 0.4 });
+    const fieldOutline = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-FIELD_WIDTH / 2, 0.03, -FIELD_LENGTH / 2),
+        new THREE.Vector3(FIELD_WIDTH / 2, 0.03, -FIELD_LENGTH / 2),
+        new THREE.Vector3(FIELD_WIDTH / 2, 0.03, FIELD_LENGTH / 2),
+        new THREE.Vector3(-FIELD_WIDTH / 2, 0.03, FIELD_LENGTH / 2),
+        new THREE.Vector3(-FIELD_WIDTH / 2, 0.03, -FIELD_LENGTH / 2),
+    ]);
+    scene.add(new THREE.Line(fieldOutline, lineMat));
 }
 
 createArena();
@@ -164,16 +166,21 @@ let spawnTimer = SPAWN_INTERVAL;
 
 let bluePieces = [];
 let redPieces = [];
-let playerPiece = null; // The piece the player controls
+let playerPiece = null;
 
 const ui = new UIManager();
 const battleManager = new BattleManager();
 const blueAI = new AIController();
 const redAI = new AIController();
+let sculptureBuilder = new SculptureBuilder(scene, FIELD_BOUNDS);
+
+// Game-over showcase state
+let showcaseMode = false;
+let showcaseTimer = 0;
+let showcaseTeam = 'blue';
 
 // Input state
 const keys = {};
-let mouseX = 0;
 let cameraAngle = 0;
 
 // ============================================================
@@ -182,10 +189,10 @@ let cameraAngle = 0;
 function spawnPiece(team) {
     const shapeKey = randomShapeKey();
     const side = team === 'blue' ? -1 : 1;
-    const x = (Math.random() - 0.5) * (FIELD_WIDTH - 4);
-    const z = side * (FIELD_LENGTH / 2 - 2);
+    const x = (Math.random() - 0.5) * (FIELD_WIDTH - 6);
+    const z = side * (FIELD_LENGTH / 2 - 3);
     const pos = new THREE.Vector3(x, 0, z);
-    return new Tetromino(shapeKey, team, pos, scene);
+    return new TetraFighter(shapeKey, team, pos, scene);
 }
 
 function spawnInitialPieces() {
@@ -197,7 +204,7 @@ function spawnInitialPieces() {
         bluePieces.push(bp);
         if (i === 0) {
             playerPiece = bp;
-            bp.speed = 4.0; // Player is slightly faster
+            bp.speed = 4.5;
         }
 
         const rp = spawnPiece('red');
@@ -209,7 +216,7 @@ function spawnReinforcements() {
     if (bluePieces.filter(p => p.alive).length < MAX_PIECES) {
         const bp = spawnPiece('blue');
         bluePieces.push(bp);
-        ui.notify('Blue reinforcement spawned!');
+        ui.notify('Blue reinforcement!');
     }
     if (redPieces.filter(p => p.alive).length < MAX_PIECES) {
         const rp = spawnPiece('red');
@@ -223,7 +230,6 @@ function spawnReinforcements() {
 window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
 
-    // Battle inputs
     if (gameRunning && playerPiece && playerPiece.inBattle) {
         const battle = battleManager.getPlayerBattle(playerPiece);
         if (battle) {
@@ -236,20 +242,16 @@ window.addEventListener('keydown', (e) => {
             }
         }
     }
-
-    // Rotate piece
-    if (e.code === 'KeyR' && playerPiece && playerPiece.alive && !playerPiece.inBattle) {
-        playerPiece.rotateShape();
-    }
 });
 
 window.addEventListener('keyup', (e) => {
     keys[e.code] = false;
 });
 
-// Mouse look
 canvas.addEventListener('click', () => {
-    canvas.requestPointerLock();
+    if (!showcaseMode) {
+        canvas.requestPointerLock();
+    }
 });
 
 document.addEventListener('mousemove', (e) => {
@@ -258,7 +260,6 @@ document.addEventListener('mousemove', (e) => {
     }
 });
 
-// Window resize
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -272,8 +273,6 @@ function handlePlayerMovement(dt) {
     if (!playerPiece || !playerPiece.alive || playerPiece.inBattle) return;
 
     const moveDir = new THREE.Vector3();
-
-    // Forward/back relative to camera
     const forward = new THREE.Vector3(Math.sin(cameraAngle), 0, Math.cos(cameraAngle));
     const right = new THREE.Vector3(Math.cos(cameraAngle), 0, -Math.sin(cameraAngle));
 
@@ -287,22 +286,29 @@ function handlePlayerMovement(dt) {
         playerPiece.position.x += moveDir.x * playerPiece.speed * dt;
         playerPiece.position.z += moveDir.z * playerPiece.speed * dt;
 
-        // Clamp
         playerPiece.position.x = THREE.MathUtils.clamp(
             playerPiece.position.x, FIELD_BOUNDS.minX + 1, FIELD_BOUNDS.maxX - 1
         );
         playerPiece.position.z = THREE.MathUtils.clamp(
             playerPiece.position.z, FIELD_BOUNDS.minZ, FIELD_BOUNDS.maxZ
         );
+
+        // Face movement direction
+        const angle = Math.atan2(moveDir.x, moveDir.z);
+        playerPiece.group.rotation.y = angle;
     }
 }
 
 // ============================================================
 // CAMERA
 // ============================================================
-function updateCamera() {
+function updateCamera(dt) {
+    if (showcaseMode) {
+        updateShowcaseCamera(dt);
+        return;
+    }
+
     if (!playerPiece || !playerPiece.alive) {
-        // Spectator mode — orbit the field
         const t = Date.now() * 0.0003;
         camera.position.set(Math.sin(t) * 20, 15, Math.cos(t) * 20);
         camera.lookAt(0, 0, 0);
@@ -310,8 +316,6 @@ function updateCamera() {
     }
 
     const pp = playerPiece.position;
-
-    // Third person: behind and above the player
     const cameraDistance = 10;
     const cameraHeight = 8;
 
@@ -321,30 +325,59 @@ function updateCamera() {
         pp.z - Math.cos(cameraAngle) * cameraDistance
     );
 
-    // Smooth follow
     camera.position.lerp(idealPos, 0.08);
 
-    const lookTarget = new THREE.Vector3(pp.x, pp.y + 1, pp.z);
-    // Look slightly ahead
+    const lookTarget = new THREE.Vector3(pp.x, pp.y + 1.5, pp.z);
     lookTarget.x += Math.sin(cameraAngle) * 3;
     lookTarget.z += Math.cos(cameraAngle) * 3;
-
     camera.lookAt(lookTarget);
 }
 
+function updateShowcaseCamera(dt) {
+    showcaseTimer += dt;
+
+    // Pan between the two sculptures
+    const cycleDuration = 8; // seconds per sculpture view
+    const totalTime = showcaseTimer % (cycleDuration * 2);
+    const viewingBlue = totalTime < cycleDuration;
+
+    const targetSculpture = viewingBlue
+        ? sculptureBuilder.getSculpture('blue')
+        : sculptureBuilder.getSculpture('red');
+
+    const sculpturePos = targetSculpture.position;
+
+    // Orbit around the sculpture
+    const orbitSpeed = 0.3;
+    const orbitRadius = 8;
+    const angle = showcaseTimer * orbitSpeed;
+
+    const idealPos = new THREE.Vector3(
+        sculpturePos.x + Math.sin(angle) * orbitRadius,
+        sculpturePos.y + 5,
+        sculpturePos.z + Math.cos(angle) * orbitRadius
+    );
+
+    camera.position.lerp(idealPos, 0.04);
+
+    const lookAt = new THREE.Vector3(sculpturePos.x, sculpturePos.y + 2, sculpturePos.z);
+    camera.lookAt(lookAt);
+}
+
 // ============================================================
-// COLLISION BETWEEN SAME-TEAM PIECES
+// SAME-TEAM AVOIDANCE
 // ============================================================
 function handleSameTeamAvoidance(pieces, dt) {
     for (let i = 0; i < pieces.length; i++) {
         for (let j = i + 1; j < pieces.length; j++) {
             const a = pieces[i], b = pieces[j];
             if (!a.alive || !b.alive) continue;
-            if (a === playerPiece || b === playerPiece) continue; // Don't push player
+            if (a === playerPiece || b === playerPiece) continue;
 
             const dist = a.position.distanceTo(b.position);
             if (dist < 2.5 && dist > 0.01) {
-                const push = new THREE.Vector3().subVectors(a.position, b.position).normalize().multiplyScalar(dt * 2);
+                const push = new THREE.Vector3().subVectors(a.position, b.position)
+                    .normalize().multiplyScalar(dt * 2);
                 a.position.add(push);
                 b.position.sub(push);
             }
@@ -361,11 +394,24 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 
     const now = performance.now();
-    const dt = Math.min((now - prevTime) / 1000, 0.05); // Cap delta
+    const dt = Math.min((now - prevTime) / 1000, 0.05);
     prevTime = now;
 
+    if (showcaseMode) {
+        updateCamera(dt);
+        renderer.render(scene, camera);
+        return;
+    }
+
     if (!gameRunning) {
-        updateCamera();
+        // Title screen — slow orbit
+        const t = Date.now() * 0.0002;
+        camera.position.set(Math.sin(t) * 25, 10, Math.cos(t) * 25);
+        camera.lookAt(0, 1, 0);
+
+        // Animate title screen fighters
+        [...bluePieces, ...redPieces].forEach(p => p.update(dt, FIELD_BOUNDS));
+
         renderer.render(scene, camera);
         return;
     }
@@ -389,19 +435,19 @@ function gameLoop() {
         const alivePieces = bluePieces.filter(p => p.alive);
         if (alivePieces.length > 0) {
             playerPiece = alivePieces[0];
-            playerPiece.speed = 4.0;
-            ui.notify('Switched to another piece!');
+            playerPiece.speed = 4.5;
+            ui.notify('Switched to another fighter!');
         } else {
             playerPiece = null;
         }
     }
 
-    // AI for non-player pieces
+    // AI
     const blueAIPieces = bluePieces.filter(p => p.alive && p !== playerPiece && !p.inBattle);
     blueAI.update(dt, blueAIPieces, redPieces.filter(p => p.alive));
     redAI.update(dt, redPieces.filter(p => p.alive && !p.inBattle), bluePieces.filter(p => p.alive));
 
-    // Update all pieces
+    // Update all fighters
     [...bluePieces, ...redPieces].forEach(p => p.update(dt, FIELD_BOUNDS));
 
     // Same-team avoidance
@@ -413,22 +459,27 @@ function gameLoop() {
         bluePieces.filter(p => p.alive),
         redPieces.filter(p => p.alive),
         (battle) => {
-            // Battle started
             if (battle.pieceA === playerPiece || battle.pieceB === playerPiece) {
                 ui.notify('CONNECTION BATTLE!');
             }
         },
-        (battle, winner, loser, side) => {
-            // Battle ended
+        (battle, winner, loser, shapeData, side) => {
             ui.flashScreen();
 
-            if (winner.team === 'blue') {
-                blueScore += loser.blocks ? loser.blocks.length : 4;
-                ui.notify(`Blue absorbed ${loser.shapeKey}! +${loser.mass || 4}`);
+            // Winner's team collects the loser's shape as art
+            const collectingTeam = winner.team;
+            sculptureBuilder.addShape(collectingTeam, shapeData);
+
+            if (collectingTeam === 'blue') {
+                blueScore++;
+                ui.notify(`Blue collected ${shapeData.shapeKey}-shape!`);
             } else {
-                redScore += loser.blocks ? loser.blocks.length : 4;
-                ui.notify(`Red absorbed ${loser.shapeKey}! +${loser.mass || 4}`);
+                redScore++;
+                ui.notify(`Red collected ${shapeData.shapeKey}-shape!`);
             }
+
+            // Destroy the loser
+            loser.destroy();
         }
     );
 
@@ -452,6 +503,10 @@ function gameLoop() {
     const aliveRed = redPieces.filter(p => p.alive).length;
     ui.updateScores(blueScore, redScore);
     ui.updatePieceCounts(aliveBlue, aliveRed);
+    ui.updateArtCounts(
+        sculptureBuilder.getShapeCount('blue'),
+        sculptureBuilder.getShapeCount('red')
+    );
 
     // Minimap
     ui.updateMinimap(
@@ -461,7 +516,7 @@ function gameLoop() {
         FIELD_BOUNDS
     );
 
-    // Highlight player piece
+    // Highlight player
     if (playerPiece && playerPiece.alive) {
         playerPiece.setHighlight(true);
     }
@@ -472,9 +527,8 @@ function gameLoop() {
     }
 
     // Camera
-    updateCamera();
+    updateCamera(dt);
 
-    // Render
     renderer.render(scene, camera);
 }
 
@@ -487,45 +541,74 @@ function startGame() {
         if (p.alive) p.destroy();
     });
 
+    // Remove old sculptures
+    scene.remove(sculptureBuilder.getSculpture('blue'));
+    scene.remove(sculptureBuilder.getSculpture('red'));
+
     gameRunning = true;
+    showcaseMode = false;
+    showcaseTimer = 0;
     gameTime = GAME_DURATION;
     blueScore = 0;
     redScore = 0;
     spawnTimer = SPAWN_INTERVAL;
     cameraAngle = 0;
 
+    // Fresh sculpture builder
+    sculptureBuilder = new SculptureBuilder(scene, FIELD_BOUNDS);
+
     spawnInitialPieces();
 
     ui.hideStartScreen();
     ui.hideGameOver();
     ui.showHUD();
-    ui.notify('Battle begins! Move with WASD, click to look around.');
+    ui.notify('Battle begins! Collect shapes to build your art piece!');
+
+    // Exit pointer lock cleanly
+    if (document.pointerLockElement) {
+        document.exitPointerLock();
+    }
 }
 
 function endGame() {
     gameRunning = false;
-    const blueWins = blueScore >= redScore;
-    ui.showGameOver(blueWins);
+
+    const blueArt = sculptureBuilder.getShapeCount('blue');
+    const redArt = sculptureBuilder.getShapeCount('red');
+    const blueWins = blueArt > redArt;
+
+    ui.hideHUD();
+    ui.hideBattle();
+    ui.showGameOver(blueWins, blueArt, redArt);
+
+    // Switch to showcase mode — orbit around the winning sculpture
+    showcaseMode = true;
+    showcaseTimer = 0;
+    showcaseTeam = blueWins ? 'blue' : 'red';
+
+    // Exit pointer lock for menu interaction
+    if (document.pointerLockElement) {
+        document.exitPointerLock();
+    }
 }
 
 // Event listeners
 document.getElementById('start-btn').addEventListener('click', startGame);
 document.getElementById('restart-btn').addEventListener('click', startGame);
 
-// Also spawn some eye-candy pieces for the title screen
+// Title screen eye candy — spawn some fighters that run around
 function titleScreenSetup() {
     for (let i = 0; i < 3; i++) {
         const bp = spawnPiece('blue');
         bluePieces.push(bp);
-        bp.speed = 1.5;
+        bp.speed = 2.0;
     }
     for (let i = 0; i < 3; i++) {
         const rp = spawnPiece('red');
         redPieces.push(rp);
-        rp.speed = 1.5;
+        rp.speed = 2.0;
     }
 }
 titleScreenSetup();
 
-// Start loop
 gameLoop();

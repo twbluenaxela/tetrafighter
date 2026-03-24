@@ -12,136 +12,261 @@ export const SHAPES = {
 };
 
 const SHAPE_KEYS = Object.keys(SHAPES);
-const BLOCK_SIZE = 1.0;
-const BLOCK_GAP = 0.05;
+const BLOCK_SIZE = 0.55;
 
 export function randomShapeKey() {
     return SHAPE_KEYS[Math.floor(Math.random() * SHAPE_KEYS.length)];
 }
 
-// Create a single cube mesh
-function createBlockMesh(color, teamColor) {
-    const size = BLOCK_SIZE - BLOCK_GAP;
+// Create a rounded cube-ish block
+function createBlockMesh(teamColor) {
+    const size = BLOCK_SIZE - 0.04;
     const geometry = new THREE.BoxGeometry(size, size, size);
     const material = new THREE.MeshPhongMaterial({
         color: teamColor,
-        emissive: new THREE.Color(teamColor).multiplyScalar(0.15),
+        emissive: new THREE.Color(teamColor).multiplyScalar(0.12),
         specular: 0x444444,
-        shininess: 30,
-        transparent: true,
-        opacity: 0.92,
+        shininess: 40,
     });
     const mesh = new THREE.Mesh(geometry, material);
-
-    // Add wireframe edge
     const edges = new THREE.EdgesGeometry(geometry);
     const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
-        color: new THREE.Color(teamColor).multiplyScalar(1.5),
+        color: new THREE.Color(teamColor).multiplyScalar(1.4),
         transparent: true,
-        opacity: 0.6,
+        opacity: 0.5,
     }));
     mesh.add(line);
-
     return mesh;
 }
 
-export class Tetromino {
+// Build the tetromino "body" (head) — the block shape sits on top
+function buildBody(blocks, teamColor) {
+    const bodyGroup = new THREE.Group();
+    const center = getBlockCenter(blocks);
+    blocks.forEach(([bx, , bz]) => {
+        const mesh = createBlockMesh(teamColor);
+        mesh.position.set(
+            (bx - center.x) * BLOCK_SIZE,
+            0,
+            (bz - center.z) * BLOCK_SIZE
+        );
+        bodyGroup.add(mesh);
+    });
+    return bodyGroup;
+}
+
+function getBlockCenter(blocks) {
+    let cx = 0, cz = 0;
+    blocks.forEach(([bx, , bz]) => { cx += bx; cz += bz; });
+    return { x: cx / blocks.length, z: cz / blocks.length };
+}
+
+// Build a simple limb (arm or leg) from capsule-like shapes
+function createLimb(length, thickness, color) {
+    const geo = new THREE.CylinderGeometry(thickness, thickness * 0.8, length, 6);
+    const mat = new THREE.MeshPhongMaterial({
+        color: color,
+        emissive: new THREE.Color(color).multiplyScalar(0.08),
+        specular: 0x333333,
+        shininess: 20,
+    });
+    const limb = new THREE.Mesh(geo, mat);
+    // Pivot at the top of the limb
+    limb.geometry.translate(0, -length / 2, 0);
+    return limb;
+}
+
+// Create a "foot" or "hand" — small sphere
+function createExtremity(radius, color) {
+    const geo = new THREE.SphereGeometry(radius, 6, 6);
+    const mat = new THREE.MeshPhongMaterial({ color, specular: 0x333333, shininess: 20 });
+    return new THREE.Mesh(geo, mat);
+}
+
+// Simple googly eyes
+function createEyes(teamColor) {
+    const eyeGroup = new THREE.Group();
+    const eyeWhite = new THREE.MeshPhongMaterial({ color: 0xffffff });
+    const eyePupil = new THREE.MeshPhongMaterial({ color: 0x111111 });
+
+    [-0.15, 0.15].forEach(xOff => {
+        const white = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), eyeWhite);
+        white.position.set(xOff, 0, 0.25);
+        const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 6), eyePupil);
+        pupil.position.set(xOff, 0, 0.32);
+        eyeGroup.add(white, pupil);
+    });
+    return eyeGroup;
+}
+
+export class TetraFighter {
     constructor(shapeKey, team, position, scene) {
         this.shapeKey = shapeKey;
         this.shapeDef = SHAPES[shapeKey];
-        this.team = team; // 'blue' or 'red'
+        this.team = team;
         this.scene = scene;
         this.alive = true;
         this.inBattle = false;
         this.battleTarget = null;
-        this.speed = 3.0;
+        this.speed = 3.5;
         this.mass = this.shapeDef.blocks.length;
-        this.repelCooldown = 0;
-        this.attractPower = 0;
-        this.repelPower = 0;
-
-        // Block data — can grow when absorbing
         this.blocks = this.shapeDef.blocks.map(b => [...b]);
 
-        // Team colors
         this.teamColor = team === 'blue' ? 0x4fc3f7 : 0xef5350;
         this.teamColorDark = team === 'blue' ? 0x1565c0 : 0xc62828;
+        this.limbColor = team === 'blue' ? 0x2288cc : 0xcc3333;
 
-        // Create group
+        // Root group
         this.group = new THREE.Group();
         this.group.position.copy(position);
-        this.group.userData.tetromino = this;
+        this.group.userData.fighter = this;
 
-        // Build meshes
-        this.blockMeshes = [];
-        this._buildMeshes();
-
-        // Movement direction: blue goes +z, red goes -z
+        // Direction: blue goes +z, red goes -z
         this.direction = team === 'blue' ? 1 : -1;
+        // Face the direction of movement
+        if (this.direction === -1) {
+            this.group.rotation.y = Math.PI;
+        }
 
-        // Velocity for physics-based movement during battles
         this.velocity = new THREE.Vector3();
-
-        // Target for AI-controlled pieces
         this.targetEnemy = null;
+
+        // Animation state
+        this.runPhase = Math.random() * Math.PI * 2;
+        this.isRunning = true;
+
+        // Build the character
+        this._buildCharacter();
 
         scene.add(this.group);
     }
 
-    _buildMeshes() {
-        // Clear old meshes
-        this.blockMeshes.forEach(m => this.group.remove(m));
-        this.blockMeshes = [];
+    _buildCharacter() {
+        // The tetromino shape sits as the "torso/head" on top
+        const bodyHeight = 1.6;
+        this.bodyGroup = buildBody(this.blocks, this.teamColor);
+        this.bodyGroup.position.y = bodyHeight;
+        this.group.add(this.bodyGroup);
 
-        // Center the blocks
-        const center = this._getCenter();
+        // Eyes on the front of the body
+        this.eyes = createEyes(this.teamColor);
+        this.eyes.position.y = bodyHeight + 0.05;
+        this.group.add(this.eyes);
 
-        this.blocks.forEach(([bx, by, bz]) => {
-            const mesh = createBlockMesh(this.shapeDef.color, this.teamColor);
-            mesh.position.set(
-                (bx - center.x) * BLOCK_SIZE,
-                by * BLOCK_SIZE + BLOCK_SIZE * 0.5,
-                (bz - center.z) * BLOCK_SIZE
-            );
-            this.group.add(mesh);
-            this.blockMeshes.push(mesh);
+        // --- ARMS ---
+        const armLength = 0.6;
+        const armThickness = 0.07;
+        const bodyWidth = this._getBodyWidth();
+
+        // Left arm pivot
+        this.leftArmPivot = new THREE.Group();
+        this.leftArmPivot.position.set(-bodyWidth / 2 - 0.1, bodyHeight - 0.05, 0);
+        this.leftArm = createLimb(armLength, armThickness, this.limbColor);
+        this.leftArmPivot.add(this.leftArm);
+        const leftHand = createExtremity(0.08, this.teamColor);
+        leftHand.position.y = -armLength;
+        this.leftArm.add(leftHand);
+        this.group.add(this.leftArmPivot);
+
+        // Right arm pivot
+        this.rightArmPivot = new THREE.Group();
+        this.rightArmPivot.position.set(bodyWidth / 2 + 0.1, bodyHeight - 0.05, 0);
+        this.rightArm = createLimb(armLength, armThickness, this.limbColor);
+        this.rightArmPivot.add(this.rightArm);
+        const rightHand = createExtremity(0.08, this.teamColor);
+        rightHand.position.y = -armLength;
+        this.rightArm.add(rightHand);
+        this.group.add(this.rightArmPivot);
+
+        // --- LEGS ---
+        const legLength = 0.7;
+        const legThickness = 0.09;
+
+        // Left leg pivot
+        this.leftLegPivot = new THREE.Group();
+        this.leftLegPivot.position.set(-0.15, 0.9, 0);
+        this.leftLeg = createLimb(legLength, legThickness, this.limbColor);
+        this.leftLegPivot.add(this.leftLeg);
+        const leftFoot = createExtremity(0.1, this.teamColorDark);
+        leftFoot.position.y = -legLength;
+        this.leftLeg.add(leftFoot);
+        this.group.add(this.leftLegPivot);
+
+        // Right leg pivot
+        this.rightLegPivot = new THREE.Group();
+        this.rightLegPivot.position.set(0.15, 0.9, 0);
+        this.rightLeg = createLimb(legLength, legThickness, this.limbColor);
+        this.rightLegPivot.add(this.rightLeg);
+        const rightFoot = createExtremity(0.1, this.teamColorDark);
+        rightFoot.position.y = -legLength;
+        this.rightLeg.add(rightFoot);
+        this.group.add(this.rightLegPivot);
+
+        // Shadow blob on ground
+        const shadowGeo = new THREE.CircleGeometry(0.5, 12);
+        const shadowMat = new THREE.MeshBasicMaterial({
+            color: 0x000000, transparent: true, opacity: 0.25,
         });
+        this.shadow = new THREE.Mesh(shadowGeo, shadowMat);
+        this.shadow.rotation.x = -Math.PI / 2;
+        this.shadow.position.y = 0.02;
+        this.group.add(this.shadow);
     }
 
-    _getCenter() {
-        let cx = 0, cz = 0;
-        this.blocks.forEach(([bx, , bz]) => { cx += bx; cz += bz; });
-        return { x: cx / this.blocks.length, z: cz / this.blocks.length };
+    _getBodyWidth() {
+        const xs = this.blocks.map(b => b[0]);
+        return (Math.max(...xs) - Math.min(...xs) + 1) * BLOCK_SIZE;
     }
 
     get position() {
         return this.group.position;
     }
 
-    getBoundingRadius() {
-        let maxDist = 0;
-        this.blocks.forEach(([bx, , bz]) => {
-            const center = this._getCenter();
-            const dx = bx - center.x;
-            const dz = bz - center.z;
-            maxDist = Math.max(maxDist, Math.sqrt(dx * dx + dz * dz));
-        });
-        return (maxDist + 0.5) * BLOCK_SIZE;
-    }
-
     update(dt, fieldBounds) {
         if (!this.alive) return;
 
-        this.repelCooldown = Math.max(0, this.repelCooldown - dt);
+        // Animation
+        if (this.isRunning && !this.inBattle) {
+            this.runPhase += dt * 10; // Run cycle speed
+            const swing = Math.sin(this.runPhase);
+            const armSwing = swing * 0.6;
+
+            // Legs swing opposite to each other
+            this.leftLegPivot.rotation.x = swing * 0.5;
+            this.rightLegPivot.rotation.x = -swing * 0.5;
+
+            // Arms swing opposite to legs
+            this.leftArmPivot.rotation.x = -armSwing;
+            this.rightArmPivot.rotation.x = armSwing;
+
+            // Slight body bob
+            this.bodyGroup.position.y = 1.6 + Math.abs(Math.sin(this.runPhase * 2)) * 0.08;
+            this.eyes.position.y = this.bodyGroup.position.y + 0.05;
+        } else if (this.inBattle) {
+            // Battle stance — arms raised, legs planted
+            const battleBob = Math.sin(Date.now() * 0.01) * 0.15;
+            this.leftArmPivot.rotation.x = -1.2 + battleBob;
+            this.rightArmPivot.rotation.x = -1.2 - battleBob;
+            this.leftLegPivot.rotation.x = 0.15;
+            this.rightLegPivot.rotation.x = -0.15;
+        }
 
         if (!this.inBattle) {
-            // Normal movement: advance toward enemy side
+            // Move forward
             this.group.position.z += this.direction * this.speed * dt;
 
-            // Slight lateral movement toward target
+            // Face movement direction + track target laterally
             if (this.targetEnemy && this.targetEnemy.alive) {
                 const dx = this.targetEnemy.position.x - this.group.position.x;
                 this.group.position.x += Math.sign(dx) * Math.min(Math.abs(dx), this.speed * 0.5 * dt);
+
+                // Rotate to face target somewhat
+                const targetAngle = Math.atan2(
+                    this.targetEnemy.position.x - this.position.x,
+                    (this.targetEnemy.position.z - this.position.z) * this.direction
+                );
+                const baseAngle = this.direction === -1 ? Math.PI : 0;
+                this.group.rotation.y = baseAngle + targetAngle * 0.3;
             }
 
             // Clamp to field
@@ -152,11 +277,19 @@ export class Tetromino {
                 this.group.position.z, fieldBounds.minZ, fieldBounds.maxZ
             );
         } else {
-            // Apply velocity (from repel/attract forces)
+            // In battle — apply velocity from repel/attract
             this.group.position.add(this.velocity.clone().multiplyScalar(dt));
-            this.velocity.multiplyScalar(0.92); // Damping
+            this.velocity.multiplyScalar(0.9);
 
-            // Clamp to field
+            // Face opponent
+            if (this.battleTarget && this.battleTarget.alive) {
+                const angle = Math.atan2(
+                    this.battleTarget.position.x - this.position.x,
+                    this.battleTarget.position.z - this.position.z
+                );
+                this.group.rotation.y = angle;
+            }
+
             this.group.position.x = THREE.MathUtils.clamp(
                 this.group.position.x, fieldBounds.minX + 1, fieldBounds.maxX - 1
             );
@@ -164,40 +297,6 @@ export class Tetromino {
                 this.group.position.z, fieldBounds.minZ, fieldBounds.maxZ
             );
         }
-
-        // Bob animation
-        const bobAmount = Math.sin(Date.now() * 0.003 + this.group.id) * 0.08;
-        this.blockMeshes.forEach(m => {
-            m.position.y = m.position.y > 0 ?
-                Math.max(BLOCK_SIZE * 0.5, m.position.y + bobAmount * 0.01) :
-                m.position.y;
-        });
-    }
-
-    absorb(other) {
-        // Merge other's blocks into this piece
-        const otherCenter = other._getCenter();
-        const myCenter = this._getCenter();
-
-        // Offset: place other's blocks relative to ours, adjacent in z
-        const maxZ = Math.max(...this.blocks.map(b => b[2]));
-        const minZOther = Math.min(...other.blocks.map(b => b[2]));
-        const offsetZ = maxZ - minZOther + 1;
-
-        const offsetX = Math.round(other.position.x - this.position.x);
-
-        other.blocks.forEach(([bx, by, bz]) => {
-            this.blocks.push([bx + offsetX, by, bz + offsetZ]);
-        });
-
-        this.mass = this.blocks.length;
-        this._buildMeshes();
-
-        // Grow speed slightly with size (diminishing returns)
-        this.speed = Math.max(1.5, 3.0 - this.blocks.length * 0.08);
-
-        // Remove the absorbed piece
-        other.destroy();
     }
 
     applyRepel(targetPos) {
@@ -211,21 +310,24 @@ export class Tetromino {
     }
 
     setHighlight(on) {
-        this.blockMeshes.forEach(mesh => {
-            mesh.material.emissive.set(on ? 0xffffff : new THREE.Color(this.teamColor).multiplyScalar(0.15));
-            mesh.material.emissiveIntensity = on ? 0.3 : 1.0;
+        // Glow effect on body blocks
+        this.bodyGroup.children.forEach(mesh => {
+            if (mesh.material) {
+                mesh.material.emissive.set(
+                    on ? 0xffffff : new THREE.Color(this.teamColor).multiplyScalar(0.12)
+                );
+                mesh.material.emissiveIntensity = on ? 0.25 : 1.0;
+            }
         });
     }
 
-    rotateShape() {
-        // Rotate blocks 90 degrees around Y axis
-        const center = this._getCenter();
-        this.blocks = this.blocks.map(([bx, by, bz]) => {
-            const rx = bx - center.x;
-            const rz = bz - center.z;
-            return [Math.round(-rz + center.x), by, Math.round(rx + center.z)];
-        });
-        this._buildMeshes();
+    // Return the shape data for the sculpture system
+    getShapeData() {
+        return {
+            shapeKey: this.shapeKey,
+            blocks: this.blocks.map(b => [...b]),
+            color: this.shapeDef.color,
+        };
     }
 
     destroy() {
@@ -233,29 +335,41 @@ export class Tetromino {
         this.inBattle = false;
         this.battleTarget = null;
 
-        // Particle-like destruction effect
-        this.blockMeshes.forEach(mesh => {
-            mesh.material.transparent = true;
+        // Death animation: character falls apart
+        const parts = [
+            this.bodyGroup, this.leftArmPivot, this.rightArmPivot,
+            this.leftLegPivot, this.rightLegPivot,
+        ];
+
+        parts.forEach((part, i) => {
             const startTime = Date.now();
-            const origY = mesh.position.y;
             const randDir = new THREE.Vector3(
-                (Math.random() - 0.5) * 6,
-                Math.random() * 8 + 2,
-                (Math.random() - 0.5) * 6
+                (Math.random() - 0.5) * 4,
+                Math.random() * 6 + 2,
+                (Math.random() - 0.5) * 4
+            );
+            const randRot = new THREE.Vector3(
+                (Math.random() - 0.5) * 8,
+                (Math.random() - 0.5) * 8,
+                (Math.random() - 0.5) * 8,
             );
 
             const animate = () => {
-                const t = (Date.now() - startTime) / 600;
+                const t = (Date.now() - startTime) / 700;
                 if (t > 1) {
-                    this.group.remove(mesh);
-                    mesh.geometry.dispose();
-                    mesh.material.dispose();
                     return;
                 }
-                mesh.position.add(randDir.clone().multiplyScalar(0.016));
-                randDir.y -= 0.3;
-                mesh.material.opacity = 1 - t;
-                mesh.scale.setScalar(1 - t * 0.5);
+                part.position.add(randDir.clone().multiplyScalar(0.016));
+                randDir.y -= 0.25;
+                part.rotation.x += randRot.x * 0.016;
+                part.rotation.z += randRot.z * 0.016;
+                // Fade out all meshes in part
+                part.traverse(child => {
+                    if (child.material) {
+                        child.material.transparent = true;
+                        child.material.opacity = 1 - t;
+                    }
+                });
                 requestAnimationFrame(animate);
             };
             animate();
@@ -263,18 +377,6 @@ export class Tetromino {
 
         setTimeout(() => {
             this.scene.remove(this.group);
-        }, 800);
-    }
-
-    getWorldBoundingBox() {
-        const box = new THREE.Box3();
-        const center = this._getCenter();
-        this.blocks.forEach(([bx, , bz]) => {
-            const wx = this.group.position.x + (bx - center.x) * BLOCK_SIZE;
-            const wz = this.group.position.z + (bz - center.z) * BLOCK_SIZE;
-            box.expandByPoint(new THREE.Vector3(wx - 0.5, 0, wz - 0.5));
-            box.expandByPoint(new THREE.Vector3(wx + 0.5, 1, wz + 0.5));
-        });
-        return box;
+        }, 900);
     }
 }

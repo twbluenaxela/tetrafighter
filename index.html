@@ -12,11 +12,12 @@
     <!-- Start Screen -->
     <div id="start-screen">
         <h1>TETRAFIGHTER</h1>
-        <p class="subtitle">Connect. Absorb. Dominate.</p>
+        <p class="subtitle">Fight. Collect. Create Art.</p>
         <button id="start-btn">START BATTLE</button>
         <div id="start-controls">
-            WASD - Move &nbsp;|&nbsp; SPACE - Attract &nbsp;|&nbsp; SHIFT - Repel<br>
-            Mouse - Look Around &nbsp;|&nbsp; R - Rotate Piece
+            WASD - Move &nbsp;|&nbsp; Mouse - Look Around<br>
+            SPACE - Attract (in battle) &nbsp;|&nbsp; SHIFT - Repel (in battle)<br>
+            <span class="hint-flavor">Defeat enemies to collect their shapes and build your sculpture!</span>
         </div>
     </div>
 
@@ -26,7 +27,8 @@
             <div class="team-info team-blue">
                 <span class="team-label">Blue Team</span>
                 <span class="team-score" id="blue-score">0</span>
-                <span class="piece-count" id="blue-pieces">Pieces: 5</span>
+                <span class="piece-count" id="blue-pieces">Fighters: 5</span>
+                <span class="art-count" id="blue-art-count">Art: 0 shapes</span>
             </div>
             <div id="round-info">
                 <div class="round-number">TetraFighter</div>
@@ -35,7 +37,8 @@
             <div class="team-info team-red" style="text-align:right;">
                 <span class="team-label">Red Team</span>
                 <span class="team-score" id="red-score">0</span>
-                <span class="piece-count" id="red-pieces">Pieces: 5</span>
+                <span class="piece-count" id="red-pieces">Fighters: 5</span>
+                <span class="art-count" id="red-art-count">Art: 0 shapes</span>
             </div>
         </div>
     </div>
@@ -61,6 +64,7 @@
     <div id="game-over">
         <h2 id="game-over-title">GAME OVER</h2>
         <p class="result-text" id="game-over-text"></p>
+        <p class="showcase-hint">Camera is showcasing the art pieces...</p>
         <button id="restart-btn">PLAY AGAIN</button>
     </div>
 

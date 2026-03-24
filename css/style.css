@@ -60,6 +60,12 @@ body {
     opacity: 0.6;
 }
 
+.art-count {
+    font-size: 12px;
+    opacity: 0.5;
+    font-style: italic;
+}
+
 #round-info {
     text-align: center;
 }
@@ -266,6 +272,14 @@ body {
     text-align: center;
 }
 
+#start-controls .hint-flavor {
+    display: block;
+    margin-top: 8px;
+    opacity: 0.7;
+    font-style: italic;
+    letter-spacing: 1px;
+}
+
 /* Game over */
 #game-over {
     position: fixed;
@@ -293,6 +307,13 @@ body {
 #game-over .result-text {
     font-size: 20px;
     opacity: 0.6;
+}
+
+#game-over .showcase-hint {
+    font-size: 14px;
+    opacity: 0.35;
+    font-style: italic;
+    margin-top: -8px;
 }
 
 #restart-btn {
