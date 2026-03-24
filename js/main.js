@@ -204,12 +204,26 @@ function spawnInitialPieces() {
         bluePieces.push(bp);
         if (i === 0) {
             playerPiece = bp;
-            bp.speed = 4.5;
+            bp.isPlayerControlled = true;
+            bp.speed = 5.0;
         }
 
         const rp = spawnPiece('red');
         redPieces.push(rp);
     }
+}
+
+function respawnFighter(fighter) {
+    const side = fighter.team === 'blue' ? -1 : 1;
+    const x = (Math.random() - 0.5) * (FIELD_WIDTH - 6);
+    const z = side * (FIELD_LENGTH / 2 - 3);
+    fighter.group.position.set(x, 0, z);
+    fighter.inBattle = false;
+    fighter.battleTarget = null;
+    fighter.velocity.set(0, 0, 0);
+    fighter.isRunning = false;
+    // Reset facing
+    fighter.group.rotation.y = fighter.direction === -1 ? Math.PI : 0;
 }
 
 function spawnReinforcements() {
@@ -236,7 +250,7 @@ window.addEventListener('keydown', (e) => {
             if (e.code === 'Space') {
                 e.preventDefault();
                 battle.playerAttract();
-            } else if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+            } else if (e.code === 'KeyE') {
                 e.preventDefault();
                 battle.playerRepel();
             }
@@ -269,6 +283,9 @@ window.addEventListener('resize', () => {
 // ============================================================
 // PLAYER MOVEMENT
 // ============================================================
+const WALK_SPEED = 2.5;
+const SPRINT_SPEED = 5.5;
+
 function handlePlayerMovement(dt) {
     if (!playerPiece || !playerPiece.alive || playerPiece.inBattle) return;
 
@@ -281,10 +298,13 @@ function handlePlayerMovement(dt) {
     if (keys['KeyA']) moveDir.sub(right);
     if (keys['KeyD']) moveDir.add(right);
 
+    const isSprinting = keys['ShiftLeft'] || keys['ShiftRight'];
+    const speed = isSprinting ? SPRINT_SPEED : WALK_SPEED;
+
     if (moveDir.length() > 0) {
         moveDir.normalize();
-        playerPiece.position.x += moveDir.x * playerPiece.speed * dt;
-        playerPiece.position.z += moveDir.z * playerPiece.speed * dt;
+        playerPiece.position.x += moveDir.x * speed * dt;
+        playerPiece.position.z += moveDir.z * speed * dt;
 
         playerPiece.position.x = THREE.MathUtils.clamp(
             playerPiece.position.x, FIELD_BOUNDS.minX + 1, FIELD_BOUNDS.maxX - 1
@@ -296,6 +316,13 @@ function handlePlayerMovement(dt) {
         // Face movement direction
         const angle = Math.atan2(moveDir.x, moveDir.z);
         playerPiece.group.rotation.y = angle;
+
+        // Animation flags
+        playerPiece.isRunning = true;
+        playerPiece.isSprinting = isSprinting;
+    } else {
+        playerPiece.isRunning = false;
+        playerPiece.isSprinting = false;
     }
 }
 
@@ -435,7 +462,8 @@ function gameLoop() {
         const alivePieces = bluePieces.filter(p => p.alive);
         if (alivePieces.length > 0) {
             playerPiece = alivePieces[0];
-            playerPiece.speed = 4.5;
+            playerPiece.isPlayerControlled = true;
+            playerPiece.speed = 5.0;
             ui.notify('Switched to another fighter!');
         } else {
             playerPiece = null;
@@ -478,8 +506,9 @@ function gameLoop() {
                 ui.notify(`Red collected ${shapeData.shapeKey}-shape!`);
             }
 
-            // Destroy the loser
+            // Loser gets destroyed, winner respawns at start
             loser.destroy();
+            respawnFighter(winner);
         }
     );
 

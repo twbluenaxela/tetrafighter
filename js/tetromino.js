@@ -130,10 +130,11 @@ export class TetraFighter {
 
         this.velocity = new THREE.Vector3();
         this.targetEnemy = null;
+        this.isPlayerControlled = false;
 
         // Animation state
         this.runPhase = Math.random() * Math.PI * 2;
-        this.isRunning = true;
+        this.isRunning = false; // driven by actual movement
 
         // Build the character
         this._buildCharacter();
@@ -227,40 +228,69 @@ export class TetraFighter {
 
         // Animation
         if (this.isRunning && !this.inBattle) {
-            this.runPhase += dt * 10; // Run cycle speed
+            const animSpeed = this.isSprinting ? 12 : 7;
+            this.runPhase += dt * animSpeed;
             const swing = Math.sin(this.runPhase);
-            const armSwing = swing * 0.6;
+            const swingAmp = this.isSprinting ? 0.7 : 0.4;
+            const armSwing = swing * (this.isSprinting ? 0.8 : 0.4);
 
-            // Legs swing opposite to each other
-            this.leftLegPivot.rotation.x = swing * 0.5;
-            this.rightLegPivot.rotation.x = -swing * 0.5;
-
-            // Arms swing opposite to legs
+            this.leftLegPivot.rotation.x = swing * swingAmp;
+            this.rightLegPivot.rotation.x = -swing * swingAmp;
             this.leftArmPivot.rotation.x = -armSwing;
             this.rightArmPivot.rotation.x = armSwing;
 
-            // Slight body bob
+            // Body bob
             this.bodyGroup.position.y = 1.6 + Math.abs(Math.sin(this.runPhase * 2)) * 0.08;
             this.eyes.position.y = this.bodyGroup.position.y + 0.05;
         } else if (this.inBattle) {
-            // Battle stance — arms raised, legs planted
             const battleBob = Math.sin(Date.now() * 0.01) * 0.15;
             this.leftArmPivot.rotation.x = -1.2 + battleBob;
             this.rightArmPivot.rotation.x = -1.2 - battleBob;
             this.leftLegPivot.rotation.x = 0.15;
             this.rightLegPivot.rotation.x = -0.15;
+        } else {
+            // Idle — gently return limbs to rest
+            this.leftLegPivot.rotation.x *= 0.9;
+            this.rightLegPivot.rotation.x *= 0.9;
+            this.leftArmPivot.rotation.x *= 0.9;
+            this.rightArmPivot.rotation.x *= 0.9;
+            this.bodyGroup.position.y = 1.6;
+            this.eyes.position.y = 1.65;
+        }
+
+        // Player-controlled pieces don't auto-move
+        if (this.isPlayerControlled) {
+            // Only clamp + battle physics
+            if (this.inBattle) {
+                this.group.position.add(this.velocity.clone().multiplyScalar(dt));
+                this.velocity.multiplyScalar(0.9);
+                if (this.battleTarget && this.battleTarget.alive) {
+                    const angle = Math.atan2(
+                        this.battleTarget.position.x - this.position.x,
+                        this.battleTarget.position.z - this.position.z
+                    );
+                    this.group.rotation.y = angle;
+                }
+            }
+            this.group.position.x = THREE.MathUtils.clamp(
+                this.group.position.x, fieldBounds.minX + 1, fieldBounds.maxX - 1
+            );
+            this.group.position.z = THREE.MathUtils.clamp(
+                this.group.position.z, fieldBounds.minZ, fieldBounds.maxZ
+            );
+            return;
         }
 
         if (!this.inBattle) {
-            // Move forward
+            // AI: move forward
+            this.isRunning = true;
+            this.isSprinting = true;
             this.group.position.z += this.direction * this.speed * dt;
 
-            // Face movement direction + track target laterally
             if (this.targetEnemy && this.targetEnemy.alive) {
                 const dx = this.targetEnemy.position.x - this.group.position.x;
                 this.group.position.x += Math.sign(dx) * Math.min(Math.abs(dx), this.speed * 0.5 * dt);
 
-                // Rotate to face target somewhat
                 const targetAngle = Math.atan2(
                     this.targetEnemy.position.x - this.position.x,
                     (this.targetEnemy.position.z - this.position.z) * this.direction
@@ -269,7 +299,6 @@ export class TetraFighter {
                 this.group.rotation.y = baseAngle + targetAngle * 0.3;
             }
 
-            // Clamp to field
             this.group.position.x = THREE.MathUtils.clamp(
                 this.group.position.x, fieldBounds.minX + 1, fieldBounds.maxX - 1
             );
