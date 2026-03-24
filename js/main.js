@@ -412,8 +412,33 @@ function handleSameTeamAvoidance(pieces, dt) {
 // HITBOX COLLISION
 // ============================================================
 const COLLISION_RADIUS = 1.8;
+const COUNTER_ROTATE_WINDOW = 0.15; // 150ms defensive window
+
+// Pending connections awaiting the counter-rotation window
+let pendingConnection = null;
 
 function checkHitboxCollisions() {
+    // If there's a pending connection, count down the window
+    if (pendingConnection) {
+        pendingConnection.timer -= 1 / 60; // approximate dt
+        if (pendingConnection.timer <= 0) {
+            // Window expired — re-check connection
+            const { pieceA, pieceB } = pendingConnection;
+            if (pieceA.alive && pieceB.alive) {
+                const blocksA = pieceA.getWorldBlocks();
+                const blocksB = pieceB.getWorldBlocks();
+                const result = checkConnection(blocksA, blocksB);
+
+                if (result.connected) {
+                    resolveConnection(pieceA, pieceB, result);
+                }
+                // If rotation broke the connection, they escape
+            }
+            pendingConnection = null;
+        }
+        return; // Don't check new collisions while one is pending
+    }
+
     for (const bp of bluePieces) {
         if (!bp.alive) continue;
         for (const rp of redPieces) {
@@ -426,38 +451,58 @@ function checkHitboxCollisions() {
                 const result = checkConnection(blocksA, blocksB);
 
                 if (result.connected) {
-                    // Determine winner: whoever has more forward velocity toward the other
-                    const bpToRp = new THREE.Vector3().subVectors(rp.position, bp.position).normalize();
-                    const bpMomentum = bp.velocity.dot(bpToRp);
-                    const rpMomentum = -rp.velocity.dot(bpToRp);
-
-                    let winner, loser;
-                    if (bpMomentum >= rpMomentum) {
-                        winner = bp;
-                        loser = rp;
-                    } else {
-                        winner = rp;
-                        loser = bp;
-                    }
-
-                    ui.flashScreen();
-
-                    const shapeData = loser.getShapeData();
-                    sculptureBuilder.addShape(winner.team, shapeData);
-
-                    if (winner.team === 'blue') {
-                        blueScore++;
-                    } else {
-                        redScore++;
-                    }
-
-                    loser.destroy();
-                    respawnFighter(winner);
-                    return; // One collision per frame to avoid issues
+                    // Start defensive counter-rotation window
+                    pendingConnection = {
+                        pieceA: bp,
+                        pieceB: rp,
+                        timer: COUNTER_ROTATE_WINDOW,
+                    };
+                    return;
                 }
             }
         }
     }
+}
+
+function resolveConnection(pieceA, pieceB, result) {
+    let winner, loser;
+
+    if (result.winnerSide === 'a') {
+        // A has more surface contact — A dominates
+        winner = pieceA;
+        loser = pieceB;
+    } else if (result.winnerSide === 'b') {
+        // B has more surface contact
+        winner = pieceB;
+        loser = pieceA;
+    } else {
+        // Tied surface area — break by momentum
+        const aToB = new THREE.Vector3().subVectors(pieceB.position, pieceA.position).normalize();
+        const aMomentum = pieceA.velocity.dot(aToB);
+        const bMomentum = -pieceB.velocity.dot(aToB);
+
+        if (aMomentum >= bMomentum) {
+            winner = pieceA;
+            loser = pieceB;
+        } else {
+            winner = pieceB;
+            loser = pieceA;
+        }
+    }
+
+    ui.flashScreen();
+
+    const shapeData = loser.getShapeData();
+    sculptureBuilder.addShape(winner.team, shapeData);
+
+    if (winner.team === 'blue') {
+        blueScore++;
+    } else {
+        redScore++;
+    }
+
+    loser.destroy();
+    respawnFighter(winner);
 }
 
 // ============================================================
