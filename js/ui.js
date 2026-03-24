@@ -71,7 +71,7 @@ export class UIManager {
 
         // Time remaining
         const timeLeft = Math.ceil(status.timeLeft);
-        this.battleBarEnemy.style.width = `${(status.timeLeft / 10) * 100}%`;
+        this.battleBarEnemy.style.width = `${(status.timeLeft / 15) * 100}%`;
 
         // Update title with status
         const titleEl = document.getElementById('battle-title');

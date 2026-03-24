@@ -273,7 +273,7 @@ canvas.addEventListener('click', () => {
 
 document.addEventListener('mousemove', (e) => {
     if (document.pointerLockElement === canvas) {
-        cameraAngle -= e.movementX * 0.003;
+        cameraAngle += e.movementX * 0.003;
     }
 });
 
@@ -290,11 +290,11 @@ const WALK_SPEED = 2.5;
 const SPRINT_SPEED = 5.5;
 
 function handlePlayerMovement(dt) {
-    if (!playerPiece || !playerPiece.alive || playerPiece.inBattle) return;
+    if (!playerPiece || !playerPiece.alive) return;
 
     const moveDir = new THREE.Vector3();
     const forward = new THREE.Vector3(Math.sin(cameraAngle), 0, Math.cos(cameraAngle));
-    const right = new THREE.Vector3(Math.cos(cameraAngle), 0, Math.sin(cameraAngle));
+    const right = new THREE.Vector3(Math.cos(cameraAngle), 0, -Math.sin(cameraAngle));
 
     if (keys['KeyW']) moveDir.add(forward);
     if (keys['KeyS']) moveDir.sub(forward);
@@ -316,9 +316,11 @@ function handlePlayerMovement(dt) {
             playerPiece.position.z, FIELD_BOUNDS.minZ, FIELD_BOUNDS.maxZ
         );
 
-        // Face movement direction
-        const angle = Math.atan2(moveDir.x, moveDir.z);
-        playerPiece.group.rotation.y = angle;
+        // Face movement direction (not during battle — Q/E controls facing)
+        if (!playerPiece.inBattle) {
+            const angle = Math.atan2(moveDir.x, moveDir.z);
+            playerPiece.group.rotation.y = angle;
+        }
 
         // Animation flags
         playerPiece.isRunning = true;

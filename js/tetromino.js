@@ -140,6 +140,8 @@ export class TetraFighter {
         // Lunge state
         this.isLunging = false;
         this.lungeCooldown = 0;
+        this.lungeVelocity = null;
+        this.lungeTimeRemaining = 0;
 
         // Build the character
         this._buildCharacter();
@@ -275,23 +277,8 @@ export class TetraFighter {
         // Lunge cooldown
         this.lungeCooldown = Math.max(0, this.lungeCooldown - dt);
 
-        // Player-controlled pieces don't auto-move
+        // Player-controlled pieces — WASD handled by main.js, just clamp bounds
         if (this.isPlayerControlled) {
-            if (this.inBattle) {
-                // Apply lunge/bounce velocity
-                this.group.position.add(this.velocity.clone().multiplyScalar(dt));
-                this.velocity.multiplyScalar(0.88);
-                if (this.velocity.length() < 0.1) this.velocity.set(0, 0, 0);
-
-                // Face opponent
-                if (this.battleTarget && this.battleTarget.alive) {
-                    const angle = Math.atan2(
-                        this.battleTarget.position.x - this.position.x,
-                        this.battleTarget.position.z - this.position.z
-                    );
-                    this.group.rotation.y = angle;
-                }
-            }
             this.group.position.x = THREE.MathUtils.clamp(
                 this.group.position.x, fieldBounds.minX + 1, fieldBounds.maxX - 1
             );
@@ -326,18 +313,10 @@ export class TetraFighter {
                 this.group.position.z, fieldBounds.minZ, fieldBounds.maxZ
             );
         } else {
-            // In battle — apply velocity from repel/attract
-            this.group.position.add(this.velocity.clone().multiplyScalar(dt));
-            this.velocity.multiplyScalar(0.9);
-
-            // Face opponent
-            if (this.battleTarget && this.battleTarget.alive) {
-                const angle = Math.atan2(
-                    this.battleTarget.position.x - this.position.x,
-                    this.battleTarget.position.z - this.position.z
-                );
-                this.group.rotation.y = angle;
-            }
+            // In battle — movement is driven by Battle system (circle-strafe + lunge)
+            // Just show running animation since the AI is actively moving
+            this.isRunning = true;
+            this.isSprinting = false;
 
             this.group.position.x = THREE.MathUtils.clamp(
                 this.group.position.x, fieldBounds.minX + 1, fieldBounds.maxX - 1
