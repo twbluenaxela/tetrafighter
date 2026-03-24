@@ -13,10 +13,6 @@ export class UIManager {
         this.blueArtCount = document.getElementById('blue-art-count');
         this.redArtCount = document.getElementById('red-art-count');
 
-        this.battleOverlay = document.getElementById('battle-overlay');
-        this.battleBarPlayer = document.getElementById('battle-bar-player');
-        this.battleBarEnemy = document.getElementById('battle-bar-enemy');
-
         this.startScreen = document.getElementById('start-screen');
         this.gameOver = document.getElementById('game-over');
         this.gameOverTitle = document.getElementById('game-over-title');
@@ -58,36 +54,6 @@ export class UIManager {
         const m = Math.floor(secondsLeft / 60);
         const s = Math.floor(secondsLeft % 60);
         this.timer.textContent = `${m}:${s.toString().padStart(2, '0')}`;
-    }
-
-    showBattleConnection(status) {
-        this.battleOverlay.classList.add('active');
-
-        // Show cooldown on the player bar as a recharge indicator
-        const cooldownPct = status.cooldownA > 0
-            ? Math.max(0, (1 - status.cooldownA / 0.8) * 100)
-            : 100;
-        this.battleBarPlayer.style.width = `${cooldownPct}%`;
-
-        // Time remaining
-        const timeLeft = Math.ceil(status.timeLeft);
-        this.battleBarEnemy.style.width = `${(status.timeLeft / 15) * 100}%`;
-
-        // Update title with status
-        const titleEl = document.getElementById('battle-title');
-        if (status.isLungingA) {
-            titleEl.textContent = 'LUNGING!';
-        } else if (status.cooldownA > 0) {
-            titleEl.textContent = 'RECHARGING...';
-        } else {
-            titleEl.textContent = `CONNECT! (${timeLeft}s)`;
-        }
-    }
-
-    hideBattle() {
-        this.battleOverlay.classList.remove('active');
-        const titleEl = document.getElementById('battle-title');
-        if (titleEl) titleEl.textContent = 'CONNECTION BATTLE!';
     }
 
     showGameOver(blueWins, blueCount, redCount) {

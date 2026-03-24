@@ -13,7 +13,7 @@ export class AIController {
 
     update(dt, pieces, enemyPieces) {
         for (const piece of pieces) {
-            if (!piece.alive || piece.inBattle) continue;
+            if (!piece.alive) continue;
 
             // Initialize timer
             if (!this.timers.has(piece.group.id)) {
@@ -37,7 +37,7 @@ export class AIController {
         let bestScore = -Infinity;
 
         for (const enemy of enemies) {
-            if (!enemy.alive || enemy.inBattle) continue;
+            if (!enemy.alive) continue;
 
             const dist = piece.position.distanceTo(enemy.position);
             // Prefer closer, smaller enemies

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { TetraFighter, randomShapeKey } from './tetromino.js';
-import { BattleManager } from './battle.js';
+import { checkConnection } from './battle.js';
 import { AIController } from './ai.js';
 import { UIManager } from './ui.js';
 import { SculptureBuilder } from './sculpture.js';
@@ -169,7 +169,6 @@ let redPieces = [];
 let playerPiece = null;
 
 const ui = new UIManager();
-const battleManager = new BattleManager();
 const blueAI = new AIController();
 const redAI = new AIController();
 let sculptureBuilder = new SculptureBuilder(scene, FIELD_BOUNDS);
@@ -218,8 +217,6 @@ function respawnFighter(fighter) {
     const x = (Math.random() - 0.5) * (FIELD_WIDTH - 6);
     const z = side * (FIELD_LENGTH / 2 - 3);
     fighter.group.position.set(x, 0, z);
-    fighter.inBattle = false;
-    fighter.battleTarget = null;
     fighter.velocity.set(0, 0, 0);
     fighter.isRunning = false;
     // Reset facing
@@ -244,19 +241,11 @@ function spawnReinforcements() {
 window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
 
-    if (gameRunning && playerPiece && playerPiece.inBattle) {
-        const battle = battleManager.getPlayerBattle(playerPiece);
-        if (battle) {
-            if (e.code === 'Space') {
-                e.preventDefault();
-                battle.playerLunge();
-            } else if (e.code === 'KeyQ') {
-                e.preventDefault();
-                battle.playerRotate(-1); // CCW
-            } else if (e.code === 'KeyE') {
-                e.preventDefault();
-                battle.playerRotate(1); // CW
-            }
+    if (gameRunning && playerPiece && playerPiece.alive) {
+        if (e.code === 'KeyQ') {
+            playerPiece.rotateBody(-1); // CCW
+        } else if (e.code === 'KeyE') {
+            playerPiece.rotateBody(1); // CW
         }
     }
 });
@@ -273,7 +262,7 @@ canvas.addEventListener('click', () => {
 
 document.addEventListener('mousemove', (e) => {
     if (document.pointerLockElement === canvas) {
-        cameraAngle += e.movementX * 0.003;
+        cameraAngle -= e.movementX * 0.003;
     }
 });
 
@@ -309,6 +298,9 @@ function handlePlayerMovement(dt) {
         playerPiece.position.x += moveDir.x * speed * dt;
         playerPiece.position.z += moveDir.z * speed * dt;
 
+        // Track velocity for collision momentum checks
+        playerPiece.velocity.set(moveDir.x * speed, 0, moveDir.z * speed);
+
         playerPiece.position.x = THREE.MathUtils.clamp(
             playerPiece.position.x, FIELD_BOUNDS.minX + 1, FIELD_BOUNDS.maxX - 1
         );
@@ -316,11 +308,9 @@ function handlePlayerMovement(dt) {
             playerPiece.position.z, FIELD_BOUNDS.minZ, FIELD_BOUNDS.maxZ
         );
 
-        // Face movement direction (not during battle — Q/E controls facing)
-        if (!playerPiece.inBattle) {
-            const angle = Math.atan2(moveDir.x, moveDir.z);
-            playerPiece.group.rotation.y = angle;
-        }
+        // Face movement direction
+        const angle = Math.atan2(moveDir.x, moveDir.z);
+        playerPiece.group.rotation.y = angle;
 
         // Animation flags
         playerPiece.isRunning = true;
@@ -328,6 +318,7 @@ function handlePlayerMovement(dt) {
     } else {
         playerPiece.isRunning = false;
         playerPiece.isSprinting = false;
+        playerPiece.velocity.set(0, 0, 0);
     }
 }
 
@@ -418,6 +409,58 @@ function handleSameTeamAvoidance(pieces, dt) {
 }
 
 // ============================================================
+// HITBOX COLLISION
+// ============================================================
+const COLLISION_RADIUS = 1.8;
+
+function checkHitboxCollisions() {
+    for (const bp of bluePieces) {
+        if (!bp.alive) continue;
+        for (const rp of redPieces) {
+            if (!rp.alive) continue;
+
+            const dist = bp.position.distanceTo(rp.position);
+            if (dist < COLLISION_RADIUS) {
+                const blocksA = bp.getWorldBlocks();
+                const blocksB = rp.getWorldBlocks();
+                const result = checkConnection(blocksA, blocksB);
+
+                if (result.connected) {
+                    // Determine winner: whoever has more forward velocity toward the other
+                    const bpToRp = new THREE.Vector3().subVectors(rp.position, bp.position).normalize();
+                    const bpMomentum = bp.velocity.dot(bpToRp);
+                    const rpMomentum = -rp.velocity.dot(bpToRp);
+
+                    let winner, loser;
+                    if (bpMomentum >= rpMomentum) {
+                        winner = bp;
+                        loser = rp;
+                    } else {
+                        winner = rp;
+                        loser = bp;
+                    }
+
+                    ui.flashScreen();
+
+                    const shapeData = loser.getShapeData();
+                    sculptureBuilder.addShape(winner.team, shapeData);
+
+                    if (winner.team === 'blue') {
+                        blueScore++;
+                    } else {
+                        redScore++;
+                    }
+
+                    loser.destroy();
+                    respawnFighter(winner);
+                    return; // One collision per frame to avoid issues
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
 // GAME LOOP
 // ============================================================
 let prevTime = performance.now();
@@ -476,9 +519,9 @@ function gameLoop() {
     }
 
     // AI
-    const blueAIPieces = bluePieces.filter(p => p.alive && p !== playerPiece && !p.inBattle);
+    const blueAIPieces = bluePieces.filter(p => p.alive && p !== playerPiece);
     blueAI.update(dt, blueAIPieces, redPieces.filter(p => p.alive));
-    redAI.update(dt, redPieces.filter(p => p.alive && !p.inBattle), bluePieces.filter(p => p.alive));
+    redAI.update(dt, redPieces.filter(p => p.alive), bluePieces.filter(p => p.alive));
 
     // Update all fighters
     [...bluePieces, ...redPieces].forEach(p => p.update(dt, FIELD_BOUNDS));
@@ -487,49 +530,8 @@ function gameLoop() {
     handleSameTeamAvoidance(bluePieces, dt);
     handleSameTeamAvoidance(redPieces, dt);
 
-    // Check for new battles
-    battleManager.checkForBattles(
-        bluePieces.filter(p => p.alive),
-        redPieces.filter(p => p.alive),
-        (battle) => {
-            if (battle.pieceA === playerPiece || battle.pieceB === playerPiece) {
-                ui.notify('CONNECTION BATTLE!');
-            }
-        },
-        (battle, winner, loser, shapeData, side) => {
-            ui.flashScreen();
-
-            // Winner's team collects the loser's shape as art
-            const collectingTeam = winner.team;
-            sculptureBuilder.addShape(collectingTeam, shapeData);
-
-            if (collectingTeam === 'blue') {
-                blueScore++;
-                ui.notify(`Blue collected ${shapeData.shapeKey}-shape!`);
-            } else {
-                redScore++;
-                ui.notify(`Red collected ${shapeData.shapeKey}-shape!`);
-            }
-
-            // Loser gets destroyed, winner respawns at start
-            loser.destroy();
-            respawnFighter(winner);
-        }
-    );
-
-    // Update battles
-    battleManager.update(dt);
-
-    // Update battle UI
-    if (playerPiece && playerPiece.inBattle) {
-        const battle = battleManager.getPlayerBattle(playerPiece);
-        if (battle) {
-            const status = battle.getStatus();
-            ui.showBattleConnection(status);
-        }
-    } else {
-        ui.hideBattle();
-    }
+    // Hitbox collision — check if opposing shapes connect on contact
+    checkHitboxCollisions();
 
     // Update HUD
     const aliveBlue = bluePieces.filter(p => p.alive).length;
@@ -611,7 +613,6 @@ function endGame() {
     const blueWins = blueArt > redArt;
 
     ui.hideHUD();
-    ui.hideBattle();
     ui.showGameOver(blueWins, blueArt, redArt);
 
     // Switch to showcase mode — orbit around the winning sculpture

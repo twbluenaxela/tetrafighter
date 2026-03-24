@@ -106,8 +106,6 @@ export class TetraFighter {
         this.team = team;
         this.scene = scene;
         this.alive = true;
-        this.inBattle = false;
-        this.battleTarget = null;
         this.speed = 3.5;
         this.mass = this.shapeDef.blocks.length;
         this.blocks = this.shapeDef.blocks.map(b => [...b]);
@@ -136,12 +134,6 @@ export class TetraFighter {
         this.runPhase = Math.random() * Math.PI * 2;
         this.isRunning = false; // driven by actual movement
         this.bodyRotation = 0; // cumulative body rotation in 90° increments
-
-        // Lunge state
-        this.isLunging = false;
-        this.lungeCooldown = 0;
-        this.lungeVelocity = null;
-        this.lungeTimeRemaining = 0;
 
         // Build the character
         this._buildCharacter();
@@ -234,7 +226,7 @@ export class TetraFighter {
         if (!this.alive) return;
 
         // Animation
-        if (this.isRunning && !this.inBattle) {
+        if (this.isRunning) {
             const animSpeed = this.isSprinting ? 12 : 7;
             this.runPhase += dt * animSpeed;
             const swing = Math.sin(this.runPhase);
@@ -249,21 +241,6 @@ export class TetraFighter {
             // Body bob
             this.bodyGroup.position.y = 1.6 + Math.abs(Math.sin(this.runPhase * 2)) * 0.08;
             this.eyes.position.y = this.bodyGroup.position.y + 0.05;
-        } else if (this.inBattle) {
-            if (this.isLunging) {
-                // Lunge pose — arms forward, body leaning
-                this.leftArmPivot.rotation.x = -1.8;
-                this.rightArmPivot.rotation.x = -1.8;
-                this.leftLegPivot.rotation.x = -0.4;
-                this.rightLegPivot.rotation.x = 0.4;
-            } else {
-                // Battle stance — arms ready, slight bob
-                const battleBob = Math.sin(Date.now() * 0.008) * 0.1;
-                this.leftArmPivot.rotation.x = -0.8 + battleBob;
-                this.rightArmPivot.rotation.x = -0.8 - battleBob;
-                this.leftLegPivot.rotation.x = 0.15;
-                this.rightLegPivot.rotation.x = -0.15;
-            }
         } else {
             // Idle — gently return limbs to rest
             this.leftLegPivot.rotation.x *= 0.9;
@@ -273,9 +250,6 @@ export class TetraFighter {
             this.bodyGroup.position.y = 1.6;
             this.eyes.position.y = 1.65;
         }
-
-        // Lunge cooldown
-        this.lungeCooldown = Math.max(0, this.lungeCooldown - dt);
 
         // Player-controlled pieces — WASD handled by main.js, just clamp bounds
         if (this.isPlayerControlled) {
@@ -288,43 +262,34 @@ export class TetraFighter {
             return;
         }
 
-        if (!this.inBattle) {
-            // AI: move forward
-            this.isRunning = true;
-            this.isSprinting = true;
-            this.group.position.z += this.direction * this.speed * dt;
+        // AI: move forward
+        this.isRunning = true;
+        this.isSprinting = true;
+        this.group.position.z += this.direction * this.speed * dt;
 
-            if (this.targetEnemy && this.targetEnemy.alive) {
-                const dx = this.targetEnemy.position.x - this.group.position.x;
-                this.group.position.x += Math.sign(dx) * Math.min(Math.abs(dx), this.speed * 0.5 * dt);
+        // Track velocity for collision momentum
+        this.velocity.set(0, 0, this.direction * this.speed);
 
-                const targetAngle = Math.atan2(
-                    this.targetEnemy.position.x - this.position.x,
-                    (this.targetEnemy.position.z - this.position.z) * this.direction
-                );
-                const baseAngle = this.direction === -1 ? Math.PI : 0;
-                this.group.rotation.y = baseAngle + targetAngle * 0.3;
-            }
+        if (this.targetEnemy && this.targetEnemy.alive) {
+            const dx = this.targetEnemy.position.x - this.group.position.x;
+            const lateralSpeed = Math.sign(dx) * Math.min(Math.abs(dx), this.speed * 0.5);
+            this.group.position.x += lateralSpeed * dt;
+            this.velocity.x = lateralSpeed;
 
-            this.group.position.x = THREE.MathUtils.clamp(
-                this.group.position.x, fieldBounds.minX + 1, fieldBounds.maxX - 1
+            const targetAngle = Math.atan2(
+                this.targetEnemy.position.x - this.position.x,
+                (this.targetEnemy.position.z - this.position.z) * this.direction
             );
-            this.group.position.z = THREE.MathUtils.clamp(
-                this.group.position.z, fieldBounds.minZ, fieldBounds.maxZ
-            );
-        } else {
-            // In battle — movement is driven by Battle system (circle-strafe + lunge)
-            // Just show running animation since the AI is actively moving
-            this.isRunning = true;
-            this.isSprinting = false;
-
-            this.group.position.x = THREE.MathUtils.clamp(
-                this.group.position.x, fieldBounds.minX + 1, fieldBounds.maxX - 1
-            );
-            this.group.position.z = THREE.MathUtils.clamp(
-                this.group.position.z, fieldBounds.minZ, fieldBounds.maxZ
-            );
+            const baseAngle = this.direction === -1 ? Math.PI : 0;
+            this.group.rotation.y = baseAngle + targetAngle * 0.3;
         }
+
+        this.group.position.x = THREE.MathUtils.clamp(
+            this.group.position.x, fieldBounds.minX + 1, fieldBounds.maxX - 1
+        );
+        this.group.position.z = THREE.MathUtils.clamp(
+            this.group.position.z, fieldBounds.minZ, fieldBounds.maxZ
+        );
     }
 
     /**
@@ -415,8 +380,6 @@ export class TetraFighter {
 
     destroy() {
         this.alive = false;
-        this.inBattle = false;
-        this.battleTarget = null;
 
         // Death animation: character falls apart
         const parts = [
