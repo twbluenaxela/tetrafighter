@@ -262,6 +262,7 @@ canvas.addEventListener('click', () => {
 
 document.addEventListener('mousemove', (e) => {
     if (document.pointerLockElement === canvas) {
+        // Standard FPS/TPS convention: mouse right = yaw right
         cameraAngle += e.movementX * 0.003;
     }
 });
@@ -278,12 +279,23 @@ window.addEventListener('resize', () => {
 const WALK_SPEED = 2.5;
 const SPRINT_SPEED = 5.5;
 
+// Camera forward = direction from camera toward the lookAt point.
+// Camera sits BEHIND the player, so forward = toward +Z rotated by cameraAngle.
+// Using standard rotation: x = sin(angle), z = cos(angle).
+// Right = 90° CW from forward in XZ plane.
+function getCameraForward() {
+    return new THREE.Vector3(Math.sin(cameraAngle), 0, Math.cos(cameraAngle));
+}
+function getCameraRight() {
+    return new THREE.Vector3(Math.cos(cameraAngle), 0, -Math.sin(cameraAngle));
+}
+
 function handlePlayerMovement(dt) {
     if (!playerPiece || !playerPiece.alive) return;
 
     const moveDir = new THREE.Vector3();
-    const forward = new THREE.Vector3(Math.sin(cameraAngle), 0, Math.cos(cameraAngle));
-    const right = new THREE.Vector3(Math.cos(cameraAngle), 0, -Math.sin(cameraAngle));
+    const forward = getCameraForward();
+    const right = getCameraRight();
 
     if (keys['KeyW']) moveDir.add(forward);
     if (keys['KeyS']) moveDir.sub(forward);
@@ -342,17 +354,23 @@ function updateCamera(dt) {
     const cameraDistance = 10;
     const cameraHeight = 8;
 
+    // Camera sits behind the player along the forward direction
+    const fwd = getCameraForward();
     const idealPos = new THREE.Vector3(
-        pp.x - Math.sin(cameraAngle) * cameraDistance,
+        pp.x - fwd.x * cameraDistance,
         pp.y + cameraHeight,
-        pp.z - Math.cos(cameraAngle) * cameraDistance
+        pp.z - fwd.z * cameraDistance
     );
 
-    camera.position.lerp(idealPos, 0.08);
+    // Responsive follow — 0.5 keeps it snappy with slight smoothing
+    camera.position.lerp(idealPos, 0.5);
 
-    const lookTarget = new THREE.Vector3(pp.x, pp.y + 1.5, pp.z);
-    lookTarget.x += Math.sin(cameraAngle) * 3;
-    lookTarget.z += Math.cos(cameraAngle) * 3;
+    // Look ahead of the player
+    const lookTarget = new THREE.Vector3(
+        pp.x + fwd.x * 3,
+        pp.y + 1.5,
+        pp.z + fwd.z * 3
+    );
     camera.lookAt(lookTarget);
 }
 
@@ -390,50 +408,44 @@ function updateShowcaseCamera(dt) {
 // ============================================================
 // PHYSICAL BODY COLLISION
 // ============================================================
-const BODY_COLLISION_RADIUS = 1.6;
-const BODY_PUSH_FORCE = 6;
+const BODY_RADIUS = 1.4; // Collision radius per fighter
 
-function handleSameTeamAvoidance(pieces, dt) {
-    for (let i = 0; i < pieces.length; i++) {
-        for (let j = i + 1; j < pieces.length; j++) {
-            const a = pieces[i], b = pieces[j];
-            if (!a.alive || !b.alive) continue;
-            if (a === playerPiece || b === playerPiece) continue;
+/**
+ * Hard position correction — if two fighters overlap, push them apart
+ * instantly so bodies never clip through each other. Applies to ALL
+ * pairs: teammates, enemies, and the player.
+ */
+function handleAllBodyCollisions() {
+    const allPieces = [...bluePieces, ...redPieces].filter(p => p.alive);
 
-            const dist = a.position.distanceTo(b.position);
-            if (dist < 2.5 && dist > 0.01) {
-                const push = new THREE.Vector3().subVectors(a.position, b.position)
-                    .normalize().multiplyScalar(dt * 2);
-                a.position.add(push);
-                b.position.sub(push);
-            }
-        }
-    }
-}
+    for (let i = 0; i < allPieces.length; i++) {
+        for (let j = i + 1; j < allPieces.length; j++) {
+            const a = allPieces[i];
+            const b = allPieces[j];
 
-function handleBodyCollisions(dt) {
-    for (const bp of bluePieces) {
-        if (!bp.alive) continue;
-        for (const rp of redPieces) {
-            if (!rp.alive) continue;
+            const dx = a.position.x - b.position.x;
+            const dz = a.position.z - b.position.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            const minDist = BODY_RADIUS * 2;
 
-            const dist = bp.position.distanceTo(rp.position);
-            if (dist < BODY_COLLISION_RADIUS && dist > 0.01) {
-                // Physical push — shapes can't pass through each other
-                const pushDir = new THREE.Vector3()
-                    .subVectors(bp.position, rp.position)
-                    .normalize();
-                const overlap = BODY_COLLISION_RADIUS - dist;
-                const pushAmount = overlap * BODY_PUSH_FORCE * dt;
+            if (dist < minDist && dist > 0.001) {
+                // Hard separation — push apart by half the overlap each
+                const overlap = minDist - dist;
+                const nx = dx / dist;
+                const nz = dz / dist;
 
-                // Push both apart (player gets less push so controls feel responsive)
-                const bpFactor = bp === playerPiece ? 0.3 : 1.0;
-                const rpFactor = rp === playerPiece ? 0.3 : 1.0;
+                // Player gets less push so controls stay responsive
+                const aIsPlayer = a === playerPiece;
+                const bIsPlayer = b === playerPiece;
+                let aFactor = 0.5;
+                let bFactor = 0.5;
+                if (aIsPlayer) { aFactor = 0.2; bFactor = 0.8; }
+                if (bIsPlayer) { bFactor = 0.2; aFactor = 0.8; }
 
-                bp.position.x += pushDir.x * pushAmount * bpFactor;
-                bp.position.z += pushDir.z * pushAmount * bpFactor;
-                rp.position.x -= pushDir.x * pushAmount * rpFactor;
-                rp.position.z -= pushDir.z * pushAmount * rpFactor;
+                a.position.x += nx * overlap * aFactor;
+                a.position.z += nz * overlap * aFactor;
+                b.position.x -= nx * overlap * bFactor;
+                b.position.z -= nz * overlap * bFactor;
             }
         }
     }
@@ -603,9 +615,7 @@ function gameLoop() {
     [...bluePieces, ...redPieces].forEach(p => p.update(dt, FIELD_BOUNDS));
 
     // Physical collisions — bodies can't pass through each other
-    handleSameTeamAvoidance(bluePieces, dt);
-    handleSameTeamAvoidance(redPieces, dt);
-    handleBodyCollisions(dt);
+    handleAllBodyCollisions();
 
     // Connection check — if shapes fit together on contact, one dies
     checkHitboxCollisions();
