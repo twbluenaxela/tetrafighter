@@ -262,8 +262,7 @@ canvas.addEventListener('click', () => {
 
 document.addEventListener('mousemove', (e) => {
     if (document.pointerLockElement === canvas) {
-        // Standard FPS/TPS convention: mouse right = yaw right
-        cameraAngle += e.movementX * 0.003;
+        cameraAngle -= e.movementX * 0.003;
     }
 });
 
@@ -279,23 +278,27 @@ window.addEventListener('resize', () => {
 const WALK_SPEED = 2.5;
 const SPRINT_SPEED = 5.5;
 
-// Camera forward = direction from camera toward the lookAt point.
-// Camera sits BEHIND the player, so forward = toward +Z rotated by cameraAngle.
-// Using standard rotation: x = sin(angle), z = cos(angle).
-// Right = 90° CW from forward in XZ plane.
-function getCameraForward() {
-    return new THREE.Vector3(Math.sin(cameraAngle), 0, Math.cos(cameraAngle));
+// Derive movement directions from what the camera actually sees.
+// This guarantees W=into screen, A=screen-left regardless of angle math.
+function getScreenForward() {
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    dir.y = 0;
+    dir.normalize();
+    return dir;
 }
-function getCameraRight() {
-    return new THREE.Vector3(Math.cos(cameraAngle), 0, -Math.sin(cameraAngle));
+function getScreenRight() {
+    const fwd = getScreenForward();
+    // 90° clockwise in XZ plane
+    return new THREE.Vector3(fwd.z, 0, -fwd.x);
 }
 
 function handlePlayerMovement(dt) {
     if (!playerPiece || !playerPiece.alive) return;
 
     const moveDir = new THREE.Vector3();
-    const forward = getCameraForward();
-    const right = getCameraRight();
+    const forward = getScreenForward();
+    const right = getScreenRight();
 
     if (keys['KeyW']) moveDir.add(forward);
     if (keys['KeyS']) moveDir.sub(forward);
@@ -354,23 +357,18 @@ function updateCamera(dt) {
     const cameraDistance = 10;
     const cameraHeight = 8;
 
-    // Camera sits behind the player along the forward direction
-    const fwd = getCameraForward();
+    // Camera orbit uses cameraAngle directly for positioning
     const idealPos = new THREE.Vector3(
-        pp.x - fwd.x * cameraDistance,
+        pp.x - Math.sin(cameraAngle) * cameraDistance,
         pp.y + cameraHeight,
-        pp.z - fwd.z * cameraDistance
+        pp.z - Math.cos(cameraAngle) * cameraDistance
     );
 
-    // Responsive follow — 0.5 keeps it snappy with slight smoothing
+    // Responsive follow
     camera.position.lerp(idealPos, 0.5);
 
-    // Look ahead of the player
-    const lookTarget = new THREE.Vector3(
-        pp.x + fwd.x * 3,
-        pp.y + 1.5,
-        pp.z + fwd.z * 3
-    );
+    // Look at the player (slightly above center)
+    const lookTarget = new THREE.Vector3(pp.x, pp.y + 1.5, pp.z);
     camera.lookAt(lookTarget);
 }
 
@@ -408,7 +406,7 @@ function updateShowcaseCamera(dt) {
 // ============================================================
 // PHYSICAL BODY COLLISION
 // ============================================================
-const BODY_RADIUS = 1.4; // Collision radius per fighter
+const BODY_RADIUS = 0.7; // Collision radius per fighter — small enough to allow contact
 
 /**
  * Hard position correction — if two fighters overlap, push them apart
@@ -454,7 +452,7 @@ function handleAllBodyCollisions() {
 // ============================================================
 // HITBOX COLLISION
 // ============================================================
-const COLLISION_RADIUS = 1.8;
+const COLLISION_RADIUS = 2.5;
 const COUNTER_ROTATE_WINDOW = 0.15; // 150ms defensive window
 
 // Pending connections awaiting the counter-rotation window
