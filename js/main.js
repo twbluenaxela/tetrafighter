@@ -262,7 +262,7 @@ canvas.addEventListener('click', () => {
 
 document.addEventListener('mousemove', (e) => {
     if (document.pointerLockElement === canvas) {
-        cameraAngle -= e.movementX * 0.003;
+        cameraAngle += e.movementX * 0.003;
     }
 });
 
@@ -388,8 +388,11 @@ function updateShowcaseCamera(dt) {
 }
 
 // ============================================================
-// SAME-TEAM AVOIDANCE
+// PHYSICAL BODY COLLISION
 // ============================================================
+const BODY_COLLISION_RADIUS = 1.6;
+const BODY_PUSH_FORCE = 6;
+
 function handleSameTeamAvoidance(pieces, dt) {
     for (let i = 0; i < pieces.length; i++) {
         for (let j = i + 1; j < pieces.length; j++) {
@@ -403,6 +406,34 @@ function handleSameTeamAvoidance(pieces, dt) {
                     .normalize().multiplyScalar(dt * 2);
                 a.position.add(push);
                 b.position.sub(push);
+            }
+        }
+    }
+}
+
+function handleBodyCollisions(dt) {
+    for (const bp of bluePieces) {
+        if (!bp.alive) continue;
+        for (const rp of redPieces) {
+            if (!rp.alive) continue;
+
+            const dist = bp.position.distanceTo(rp.position);
+            if (dist < BODY_COLLISION_RADIUS && dist > 0.01) {
+                // Physical push — shapes can't pass through each other
+                const pushDir = new THREE.Vector3()
+                    .subVectors(bp.position, rp.position)
+                    .normalize();
+                const overlap = BODY_COLLISION_RADIUS - dist;
+                const pushAmount = overlap * BODY_PUSH_FORCE * dt;
+
+                // Push both apart (player gets less push so controls feel responsive)
+                const bpFactor = bp === playerPiece ? 0.3 : 1.0;
+                const rpFactor = rp === playerPiece ? 0.3 : 1.0;
+
+                bp.position.x += pushDir.x * pushAmount * bpFactor;
+                bp.position.z += pushDir.z * pushAmount * bpFactor;
+                rp.position.x -= pushDir.x * pushAmount * rpFactor;
+                rp.position.z -= pushDir.z * pushAmount * rpFactor;
             }
         }
     }
@@ -571,11 +602,12 @@ function gameLoop() {
     // Update all fighters
     [...bluePieces, ...redPieces].forEach(p => p.update(dt, FIELD_BOUNDS));
 
-    // Same-team avoidance
+    // Physical collisions — bodies can't pass through each other
     handleSameTeamAvoidance(bluePieces, dt);
     handleSameTeamAvoidance(redPieces, dt);
+    handleBodyCollisions(dt);
 
-    // Hitbox collision — check if opposing shapes connect on contact
+    // Connection check — if shapes fit together on contact, one dies
     checkHitboxCollisions();
 
     // Update HUD

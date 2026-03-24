@@ -262,26 +262,37 @@ export class TetraFighter {
             return;
         }
 
-        // AI: move forward
+        // AI movement — seek target enemy, not just march forward
         this.isRunning = true;
         this.isSprinting = true;
-        this.group.position.z += this.direction * this.speed * dt;
-
-        // Track velocity for collision momentum
-        this.velocity.set(0, 0, this.direction * this.speed);
 
         if (this.targetEnemy && this.targetEnemy.alive) {
-            const dx = this.targetEnemy.position.x - this.group.position.x;
-            const lateralSpeed = Math.sign(dx) * Math.min(Math.abs(dx), this.speed * 0.5);
-            this.group.position.x += lateralSpeed * dt;
-            this.velocity.x = lateralSpeed;
-
-            const targetAngle = Math.atan2(
+            // Move toward the target enemy
+            const toEnemy = new THREE.Vector3(
                 this.targetEnemy.position.x - this.position.x,
-                (this.targetEnemy.position.z - this.position.z) * this.direction
+                0,
+                this.targetEnemy.position.z - this.position.z
             );
+            const dist = toEnemy.length();
+
+            if (dist > 0.5) {
+                toEnemy.normalize();
+                this.group.position.x += toEnemy.x * this.speed * dt;
+                this.group.position.z += toEnemy.z * this.speed * dt;
+                this.velocity.copy(toEnemy).multiplyScalar(this.speed);
+
+                // Face movement direction
+                this.group.rotation.y = Math.atan2(toEnemy.x, toEnemy.z);
+            } else {
+                this.velocity.set(0, 0, 0);
+            }
+        } else {
+            // No target — march forward as fallback
+            this.group.position.z += this.direction * this.speed * dt;
+            this.velocity.set(0, 0, this.direction * this.speed);
+
             const baseAngle = this.direction === -1 ? Math.PI : 0;
-            this.group.rotation.y = baseAngle + targetAngle * 0.3;
+            this.group.rotation.y = baseAngle;
         }
 
         this.group.position.x = THREE.MathUtils.clamp(
