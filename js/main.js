@@ -200,13 +200,20 @@ function createFloatingShapes() {
             group.add(line);
         });
 
-        // Random position in the sky around the arena
-        const spread = 40;
-        group.position.set(
-            (Math.random() - 0.5) * spread,
-            6 + Math.random() * 18,
-            (Math.random() - 0.5) * spread
-        );
+        // Position outside the arena bounds, floating in the sky
+        const side = Math.random() < 0.5 ? -1 : 1;
+        const alongWall = Math.random() < 0.5;
+        let px, pz;
+        if (alongWall) {
+            // Beyond the side walls
+            px = side * (FIELD_WIDTH / 2 + 5 + Math.random() * 15);
+            pz = (Math.random() - 0.5) * FIELD_LENGTH;
+        } else {
+            // Beyond the end walls
+            px = (Math.random() - 0.5) * (FIELD_WIDTH + 20);
+            pz = side * (FIELD_LENGTH / 2 + 5 + Math.random() * 10);
+        }
+        group.position.set(px, 4 + Math.random() * 16, pz);
         group.rotation.set(
             Math.random() * Math.PI,
             Math.random() * Math.PI,
