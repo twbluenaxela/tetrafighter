@@ -196,18 +196,25 @@ export function stepAndSync() {
             body.setAngvel({ x: 0, y: angVel, z: 0 }, true);
         } else {
             // NON-SWEEPING FIGHTER: torque-based facing
-            // DO NOT setRotation — let Rapier own the rotation so collision
-            // angular impulses persist and spin the fighter on hit
             const currentAngle = quatToYAngle(body.rotation());
             const targetAngle = (fighter.desiredFacing || 0) + bodyGroupY;
             const angleDiff = shortestAngleDiff(currentAngle, targetAngle);
-
-            // Proportional torque controller + strong velocity damping
             const currentAngVel = body.angvel().y;
-            let torque = angleDiff * K_ROT - currentAngVel * K_ROT_DAMP;
-            // Clamp to prevent wild spinning from large angle jumps
-            torque = Math.max(-MAX_TORQUE, Math.min(MAX_TORQUE, torque));
-            body.addTorque({ x: 0, y: torque, z: 0 }, true);
+
+            // If close enough to target and barely spinning, snap — no wobble
+            if (Math.abs(angleDiff) < 0.05 && Math.abs(currentAngVel) < 0.5) {
+                const ha = targetAngle / 2;
+                body.setRotation(
+                    { x: 0, y: Math.sin(ha), z: 0, w: Math.cos(ha) },
+                    true
+                );
+                body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+            } else {
+                // Torque controller steers toward desired facing
+                let torque = angleDiff * K_ROT - currentAngVel * K_ROT_DAMP;
+                torque = Math.max(-MAX_TORQUE, Math.min(MAX_TORQUE, torque));
+                body.addTorque({ x: 0, y: torque, z: 0 }, true);
+            }
         }
     }
 
