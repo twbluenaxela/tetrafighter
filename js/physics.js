@@ -2,9 +2,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
 
 const BLOCK_SIZE = 0.55;
-const K_ROT = 30; // Rotational proportional gain for facing torque
-const K_ROT_DAMP = 12; // Velocity damping to prevent oscillation
-const MAX_TORQUE = 20; // Clamp torque to prevent wild spinning
+// No torque controller — hard setRotation for facing (no wobble)
 
 let world = null;
 let R = null;
@@ -69,7 +67,7 @@ export function createFighterBody(fighter, isPlayer = false) {
     const bd = R.RigidBodyDesc.dynamic()
         .setTranslation(pos.x, 0, pos.z)
         .setLinearDamping(1.0)
-        .setAngularDamping(6.0);
+        .setAngularDamping(10.0);
 
     const body = world.createRigidBody(bd);
 
@@ -163,7 +161,7 @@ export function promoteToPlayer(fighter) {
     const bd = R.RigidBodyDesc.dynamic()
         .setTranslation(pos.x, pos.y, pos.z)
         .setLinearDamping(1.0)
-        .setAngularDamping(6.0);
+        .setAngularDamping(10.0);
     const newBody = world.createRigidBody(bd);
     newBody.setRotation(rot, true);
 
@@ -195,26 +193,14 @@ export function stepAndSync() {
                            / fighter.rotationAnim.duration * 2.5;
             body.setAngvel({ x: 0, y: angVel, z: 0 }, true);
         } else {
-            // NON-SWEEPING FIGHTER: torque-based facing
-            const currentAngle = quatToYAngle(body.rotation());
+            // NON-SWEEPING: hard snap to desired facing — no torque, no wobble
             const targetAngle = (fighter.desiredFacing || 0) + bodyGroupY;
-            const angleDiff = shortestAngleDiff(currentAngle, targetAngle);
-            const currentAngVel = body.angvel().y;
-
-            // If close enough to target and barely spinning, snap — no wobble
-            if (Math.abs(angleDiff) < 0.05 && Math.abs(currentAngVel) < 0.5) {
-                const ha = targetAngle / 2;
-                body.setRotation(
-                    { x: 0, y: Math.sin(ha), z: 0, w: Math.cos(ha) },
-                    true
-                );
-                body.setAngvel({ x: 0, y: 0, z: 0 }, true);
-            } else {
-                // Torque controller steers toward desired facing
-                let torque = angleDiff * K_ROT - currentAngVel * K_ROT_DAMP;
-                torque = Math.max(-MAX_TORQUE, Math.min(MAX_TORQUE, torque));
-                body.addTorque({ x: 0, y: torque, z: 0 }, true);
-            }
+            const ha = targetAngle / 2;
+            body.setRotation(
+                { x: 0, y: Math.sin(ha), z: 0, w: Math.cos(ha) },
+                true
+            );
+            body.setAngvel({ x: 0, y: 0, z: 0 }, true);
         }
     }
 
@@ -231,13 +217,6 @@ export function stepAndSync() {
         }
         fighter.group.position.x = pos.x;
         fighter.group.position.z = pos.z;
-
-        // Rotation readback — Rapier now owns rotation
-        // group.rotation.y + bodyGroup.rotation.y = total visual angle
-        // Rapier stores the total physical angle, so subtract bodyGroupY
-        const physAngle = quatToYAngle(body.rotation());
-        const bodyGroupY = fighter.bodyGroup ? fighter.bodyGroup.rotation.y : 0;
-        fighter.group.rotation.y = physAngle - bodyGroupY;
     }
 }
 
