@@ -2,7 +2,9 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
 
 const BLOCK_SIZE = 0.55;
-const K_ROT = 40; // Rotational proportional gain for facing torque
+const K_ROT = 30; // Rotational proportional gain for facing torque
+const K_ROT_DAMP = 12; // Velocity damping to prevent oscillation
+const MAX_TORQUE = 20; // Clamp torque to prevent wild spinning
 
 let world = null;
 let R = null;
@@ -67,7 +69,7 @@ export function createFighterBody(fighter, isPlayer = false) {
     const bd = R.RigidBodyDesc.dynamic()
         .setTranslation(pos.x, 0, pos.z)
         .setLinearDamping(1.0)
-        .setAngularDamping(3.0);
+        .setAngularDamping(6.0);
 
     const body = world.createRigidBody(bd);
 
@@ -161,7 +163,7 @@ export function promoteToPlayer(fighter) {
     const bd = R.RigidBodyDesc.dynamic()
         .setTranslation(pos.x, pos.y, pos.z)
         .setLinearDamping(1.0)
-        .setAngularDamping(3.0);
+        .setAngularDamping(6.0);
     const newBody = world.createRigidBody(bd);
     newBody.setRotation(rot, true);
 
@@ -200,9 +202,11 @@ export function stepAndSync() {
             const targetAngle = (fighter.desiredFacing || 0) + bodyGroupY;
             const angleDiff = shortestAngleDiff(currentAngle, targetAngle);
 
-            // Proportional torque controller + velocity damping for stability
+            // Proportional torque controller + strong velocity damping
             const currentAngVel = body.angvel().y;
-            const torque = angleDiff * K_ROT - currentAngVel * 5;
+            let torque = angleDiff * K_ROT - currentAngVel * K_ROT_DAMP;
+            // Clamp to prevent wild spinning from large angle jumps
+            torque = Math.max(-MAX_TORQUE, Math.min(MAX_TORQUE, torque));
             body.addTorque({ x: 0, y: torque, z: 0 }, true);
         }
     }
