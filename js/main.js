@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TetraFighter, randomShapeKey } from './tetromino.js';
+import { TetraFighter, randomShapeKey, SHAPES } from './tetromino.js';
 import { checkConnection } from './battle.js';
 import { AIController } from './ai.js';
 import { UIManager } from './ui.js';
@@ -162,6 +162,106 @@ function createArena() {
 }
 
 createArena();
+
+// ============================================================
+// FLOATING BACKGROUND SHAPES
+// ============================================================
+const floatingShapes = [];
+
+function createFloatingShapes() {
+    const BLOCK_SIZE = 0.55;
+    const shapeKeys = Object.keys(SHAPES);
+    const colors = [0x4fc3f7, 0xef5350, 0x9c27b0, 0x4caf50, 0xff9800, 0x00bcd4];
+
+    for (let i = 0; i < 20; i++) {
+        const shapeDef = SHAPES[shapeKeys[Math.floor(Math.random() * shapeKeys.length)]];
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        const group = new THREE.Group();
+
+        // Build wireframe blocks
+        const center = { x: 0, z: 0 };
+        shapeDef.blocks.forEach(([bx, , bz]) => { center.x += bx; center.z += bz; });
+        center.x /= shapeDef.blocks.length;
+        center.z /= shapeDef.blocks.length;
+
+        shapeDef.blocks.forEach(([bx, , bz]) => {
+            const size = BLOCK_SIZE - 0.04;
+            const geo = new THREE.BoxGeometry(size, size, size);
+            const edges = new THREE.EdgesGeometry(geo);
+            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
+                color, transparent: true, opacity: 0.12 + Math.random() * 0.08,
+            }));
+            line.position.set(
+                (bx - center.x) * BLOCK_SIZE,
+                0,
+                (bz - center.z) * BLOCK_SIZE
+            );
+            group.add(line);
+        });
+
+        // Random position in the sky around the arena
+        const spread = 40;
+        group.position.set(
+            (Math.random() - 0.5) * spread,
+            6 + Math.random() * 18,
+            (Math.random() - 0.5) * spread
+        );
+        group.rotation.set(
+            Math.random() * Math.PI,
+            Math.random() * Math.PI,
+            Math.random() * Math.PI
+        );
+        const scale = 0.8 + Math.random() * 1.5;
+        group.scale.setScalar(scale);
+
+        scene.add(group);
+        floatingShapes.push({
+            mesh: group,
+            rotSpeed: new THREE.Vector3(
+                (Math.random() - 0.5) * 0.04,
+                (Math.random() - 0.5) * 0.04,
+                (Math.random() - 0.5) * 0.03
+            ),
+            bobSpeed: 0.08 + Math.random() * 0.12,
+            bobPhase: Math.random() * Math.PI * 2,
+            baseY: group.position.y,
+        });
+    }
+}
+createFloatingShapes();
+
+function updateFloatingShapes(dt) {
+    for (const s of floatingShapes) {
+        s.mesh.rotation.x += s.rotSpeed.x * dt;
+        s.mesh.rotation.y += s.rotSpeed.y * dt;
+        s.mesh.rotation.z += s.rotSpeed.z * dt;
+        s.bobPhase += s.bobSpeed * dt;
+        s.mesh.position.y = s.baseY + Math.sin(s.bobPhase) * 0.5;
+    }
+}
+
+// ============================================================
+// CONNECTION SOUND (synthesized click via Web Audio)
+// ============================================================
+let audioCtx = null;
+
+function playConnectionClick() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    // Short percussive click
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.06);
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.08);
+}
 
 // ============================================================
 // GAME STATE
@@ -510,6 +610,7 @@ function resolveConnection(pieceA, pieceB, result) {
     }
 
     ui.flashScreen();
+    playConnectionClick();
 
     const shapeData = loser.getShapeData();
     sculptureBuilder.addShape(winner.team, shapeData);
@@ -536,6 +637,8 @@ function gameLoop() {
     const now = performance.now();
     const dt = Math.min((now - prevTime) / 1000, 0.05);
     prevTime = now;
+
+    updateFloatingShapes(dt);
 
     if (showcaseMode) {
         updateCamera(dt);
