@@ -2,10 +2,22 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
 
 const BLOCK_SIZE = 0.55;
+const K_ROT = 40; // Rotational proportional gain for facing torque
 
 let world = null;
 let R = null;
 const fighterBodies = new Map();
+
+function quatToYAngle(q) {
+    return 2 * Math.atan2(q.y, q.w);
+}
+
+function shortestAngleDiff(from, to) {
+    let diff = to - from;
+    while (diff > Math.PI) diff -= 2 * Math.PI;
+    while (diff < -Math.PI) diff += 2 * Math.PI;
+    return diff;
+}
 
 export async function initPhysics() {
     await RAPIER.init();
@@ -55,13 +67,12 @@ export function createFighterBody(fighter, isPlayer = false) {
     const bd = R.RigidBodyDesc.dynamic()
         .setTranslation(pos.x, 0, pos.z)
         .setLinearDamping(1.0)
-        .setAngularDamping(10.0);
+        .setAngularDamping(3.0);
 
     const body = world.createRigidBody(bd);
-    // No setEnabledTranslations/setEnabledRotations — we clamp Y manually
-    // and override rotation each frame via setRotation
 
-    const halfAngle = fighter.group.rotation.y / 2;
+    const initAngle = fighter.desiredFacing !== undefined ? fighter.desiredFacing : fighter.group.rotation.y;
+    const halfAngle = initAngle / 2;
     body.setRotation(
         { x: 0, y: Math.sin(halfAngle), z: 0, w: Math.cos(halfAngle) },
         true
@@ -111,12 +122,12 @@ export function rebuildColliders(fighter) {
     _addBlockColliders(fighter, body, density);
 }
 
-// Fix 3: Force-based movement — preserves collision impulses
+// Force-based movement — preserves collision impulses
 export function setFighterVelocity(fighter, vx, vz) {
     const body = fighterBodies.get(fighter);
     if (!body) return;
     const cur = body.linvel();
-    const K = 60; // proportional gain
+    const K = 60;
     body.resetForces(true);
     body.addForce({ x: (vx - cur.x) * K, y: 0, z: (vz - cur.z) * K }, true);
 }
@@ -126,6 +137,7 @@ export function teleportFighter(fighter, x, z, yAngle) {
     if (body) {
         body.setTranslation({ x, y: 0, z }, true);
         body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        body.setAngvel({ x: 0, y: 0, z: 0 }, true);
         body.resetForces(true);
         if (yAngle !== undefined) {
             const ha = yAngle / 2;
@@ -133,6 +145,7 @@ export function teleportFighter(fighter, x, z, yAngle) {
                 { x: 0, y: Math.sin(ha), z: 0, w: Math.cos(ha) },
                 true
             );
+            fighter.desiredFacing = yAngle;
         }
     }
 }
@@ -148,54 +161,72 @@ export function promoteToPlayer(fighter) {
     const bd = R.RigidBodyDesc.dynamic()
         .setTranslation(pos.x, pos.y, pos.z)
         .setLinearDamping(1.0)
-        .setAngularDamping(10.0);
+        .setAngularDamping(3.0);
     const newBody = world.createRigidBody(bd);
-    // No setEnabledTranslations/setEnabledRotations
     newBody.setRotation(rot, true);
 
     _addBlockColliders(fighter, newBody, 4.0);
     fighterBodies.set(fighter, newBody);
 }
 
-// Fix 4 + Fix 7: Sync bodyGroup rotation to Rapier + clamp Y
+// Torque-based facing + angular momentum transfer from sweep collisions
 export function stepAndSync() {
     if (!world) return;
 
-    // Sync facing + sweep rotations: game code → Rapier (before step)
+    // Pre-step: sync game state → Rapier
     for (const [fighter, body] of fighterBodies) {
         if (!fighter.alive) continue;
-        // Include bodyGroup.rotation.y so colliders physically sweep
-        const bodyGroupY = fighter.bodyGroup ? fighter.bodyGroup.rotation.y : 0;
-        const totalAngle = fighter.group.rotation.y + bodyGroupY;
-        const ha = totalAngle / 2;
-        body.setRotation(
-            { x: 0, y: Math.sin(ha), z: 0, w: Math.cos(ha) },
-            true
-        );
 
-        // Set angular velocity during sweep so Rapier computes contact forces
-        // Without this, setRotation teleports but gives zero angular velocity
-        // → no tangential velocity at contact points → no push force
+        const bodyGroupY = fighter.bodyGroup ? fighter.bodyGroup.rotation.y : 0;
+
         if (fighter.rotationAnim) {
-            const angVel = (fighter.rotationAnim.dir * Math.PI / 2) / fighter.rotationAnim.duration * 2.5;
+            // SWEEPING FIGHTER: animation-controlled rotation
+            // Hard setRotation so the sweep arc is precise
+            const totalAngle = (fighter.desiredFacing || 0) + bodyGroupY;
+            const ha = totalAngle / 2;
+            body.setRotation(
+                { x: 0, y: Math.sin(ha), z: 0, w: Math.cos(ha) },
+                true
+            );
+            // Angular velocity so Rapier computes contact forces from the sweep
+            const angVel = (fighter.rotationAnim.dir * Math.PI / 2)
+                           / fighter.rotationAnim.duration * 2.5;
             body.setAngvel({ x: 0, y: angVel, z: 0 }, true);
         } else {
-            body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+            // NON-SWEEPING FIGHTER: torque-based facing
+            // DO NOT setRotation — let Rapier own the rotation so collision
+            // angular impulses persist and spin the fighter on hit
+            const currentAngle = quatToYAngle(body.rotation());
+            const targetAngle = (fighter.desiredFacing || 0) + bodyGroupY;
+            const angleDiff = shortestAngleDiff(currentAngle, targetAngle);
+
+            // Proportional torque controller + velocity damping for stability
+            const currentAngVel = body.angvel().y;
+            const torque = angleDiff * K_ROT - currentAngVel * 5;
+            body.addTorque({ x: 0, y: torque, z: 0 }, true);
         }
     }
 
     world.step();
 
-    // Sync positions: Rapier → Three.js (after step) + clamp Y to 0
+    // Post-step: Rapier → Three.js (position + rotation readback)
     for (const [fighter, body] of fighterBodies) {
         if (!fighter.alive) continue;
+
+        // Position readback + Y clamp
         const pos = body.translation();
-        // Clamp Y to ground plane (no gravity but collisions could nudge Y)
         if (pos.y !== 0) {
             body.setTranslation({ x: pos.x, y: 0, z: pos.z }, true);
         }
         fighter.group.position.x = pos.x;
         fighter.group.position.z = pos.z;
+
+        // Rotation readback — Rapier now owns rotation
+        // group.rotation.y + bodyGroup.rotation.y = total visual angle
+        // Rapier stores the total physical angle, so subtract bodyGroupY
+        const physAngle = quatToYAngle(body.rotation());
+        const bodyGroupY = fighter.bodyGroup ? fighter.bodyGroup.rotation.y : 0;
+        fighter.group.rotation.y = physAngle - bodyGroupY;
     }
 }
 

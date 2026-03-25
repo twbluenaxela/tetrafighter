@@ -128,6 +128,7 @@ export class TetraFighter {
         this.velocity = new THREE.Vector3();
         this.targetEnemy = null;
         this.isPlayerControlled = false;
+        this.desiredFacing = this.group.rotation.y;
 
         // Animation state
         this.runPhase = Math.random() * Math.PI * 2;
@@ -296,7 +297,8 @@ export class TetraFighter {
                 this.velocity.copy(toEnemy).multiplyScalar(this.speed);
 
                 // Face movement direction
-                this.group.rotation.y = Math.atan2(toEnemy.x, toEnemy.z);
+                this.desiredFacing = Math.atan2(toEnemy.x, toEnemy.z);
+                this.group.rotation.y = this.desiredFacing; // fallback for non-physics
             } else {
                 this.velocity.set(0, 0, 0);
             }
@@ -306,7 +308,8 @@ export class TetraFighter {
             this.velocity.set(0, 0, this.direction * this.speed);
 
             const baseAngle = this.direction === -1 ? Math.PI : 0;
-            this.group.rotation.y = baseAngle;
+            this.desiredFacing = baseAngle;
+            this.group.rotation.y = this.desiredFacing; // fallback for non-physics
         }
 
         this.group.position.x = THREE.MathUtils.clamp(

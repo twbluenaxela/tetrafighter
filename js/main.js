@@ -229,6 +229,7 @@ function respawnFighter(fighter) {
     fighter.isRunning = false;
     // Reset facing
     const yAngle = fighter.direction === -1 ? Math.PI : 0;
+    fighter.desiredFacing = yAngle;
     fighter.group.rotation.y = yAngle;
     // Teleport Rapier body to match
     teleportFighter(fighter, x, z, yAngle);
@@ -346,7 +347,8 @@ function handlePlayerMovement(dt) {
 
         // Face movement direction
         const angle = Math.atan2(moveDir.x, moveDir.z);
-        playerPiece.group.rotation.y = angle;
+        playerPiece.desiredFacing = angle;
+        playerPiece.group.rotation.y = angle; // fallback for non-physics
 
         // Animation flags
         playerPiece.isRunning = true;
