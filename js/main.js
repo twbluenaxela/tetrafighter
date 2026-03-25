@@ -189,7 +189,8 @@ function createFloatingShapes() {
             const geo = new THREE.BoxGeometry(size, size, size);
             const edges = new THREE.EdgesGeometry(geo);
             const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
-                color, transparent: true, opacity: 0.12 + Math.random() * 0.08,
+                color, transparent: true, opacity: 0.3 + Math.random() * 0.2,
+                fog: false, // ignore scene fog so they stay visible at distance
             }));
             line.position.set(
                 (bx - center.x) * BLOCK_SIZE,
@@ -211,7 +212,7 @@ function createFloatingShapes() {
             Math.random() * Math.PI,
             Math.random() * Math.PI
         );
-        const scale = 0.8 + Math.random() * 1.5;
+        const scale = 1.5 + Math.random() * 2.5;
         group.scale.setScalar(scale);
 
         scene.add(group);
