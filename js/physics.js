@@ -84,7 +84,7 @@ function _addBlockColliders(fighter, body, density) {
                 (bz - center.z) * BLOCK_SIZE
             )
             .setDensity(density)
-            .setRestitution(0.5)
+            .setRestitution(0.6)
             .setFriction(0.5);
         world.createCollider(cd, body);
     }
@@ -177,7 +177,7 @@ export function stepAndSync() {
         // Without this, setRotation teleports but gives zero angular velocity
         // → no tangential velocity at contact points → no push force
         if (fighter.rotationAnim) {
-            const angVel = (fighter.rotationAnim.dir * Math.PI / 2) / fighter.rotationAnim.duration;
+            const angVel = (fighter.rotationAnim.dir * Math.PI / 2) / fighter.rotationAnim.duration * 2.5;
             body.setAngvel({ x: 0, y: angVel, z: 0 }, true);
         } else {
             body.setAngvel({ x: 0, y: 0, z: 0 }, true);
