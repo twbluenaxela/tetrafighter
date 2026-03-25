@@ -8,7 +8,6 @@ import {
     initPhysics, resetWorld, createBoundaries, createFighterBody,
     removeFighterBody, rebuildColliders, setFighterVelocity,
     teleportFighter, promoteToPlayer, stepAndSync, hasBody,
-    applyRotationSweepForce,
 } from './physics.js';
 
 // Initialize Rapier WASM before anything else
@@ -258,10 +257,8 @@ window.addEventListener('keydown', (e) => {
     if (gameRunning && playerPiece && playerPiece.alive) {
         if (e.code === 'KeyQ') {
             playerPiece.rotateBody(-1); // CCW
-            rebuildColliders(playerPiece);
         } else if (e.code === 'KeyE') {
             playerPiece.rotateBody(1); // CW
-            rebuildColliders(playerPiece);
         }
     }
 });
@@ -605,14 +602,7 @@ function gameLoop() {
         }
     });
 
-    // Rotation sweep push — applied each frame during the swing animation
-    [...bluePieces, ...redPieces].forEach(p => {
-        if (p.alive && p.rotationAnim && hasBody(p)) {
-            applyRotationSweepForce(p);
-        }
-    });
-
-    // Rapier physics step — handles body collisions + rotation push
+    // Rapier physics step — colliders sweep during rotation, solver handles all push forces
     stepAndSync(dt);
 
     // Connection check — if shapes fit together on contact, one dies

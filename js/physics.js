@@ -54,12 +54,12 @@ export function createFighterBody(fighter, isPlayer = false) {
     const pos = fighter.group.position;
     const bd = R.RigidBodyDesc.dynamic()
         .setTranslation(pos.x, 0, pos.z)
-        .setLinearDamping(5.0)
+        .setLinearDamping(1.0)
         .setAngularDamping(10.0);
 
     const body = world.createRigidBody(bd);
-    body.setEnabledTranslations(true, false, true, true);
-    body.setEnabledRotations(false, false, false, true);
+    // No setEnabledTranslations/setEnabledRotations — we clamp Y manually
+    // and override rotation each frame via setRotation
 
     const halfAngle = fighter.group.rotation.y / 2;
     body.setRotation(
@@ -84,8 +84,8 @@ function _addBlockColliders(fighter, body, density) {
                 (bz - center.z) * BLOCK_SIZE
             )
             .setDensity(density)
-            .setRestitution(0.1)
-            .setFriction(0.3);
+            .setRestitution(0.3)
+            .setFriction(0.5);
         world.createCollider(cd, body);
     }
 }
@@ -111,11 +111,14 @@ export function rebuildColliders(fighter) {
     _addBlockColliders(fighter, body, density);
 }
 
+// Fix 3: Force-based movement — preserves collision impulses
 export function setFighterVelocity(fighter, vx, vz) {
     const body = fighterBodies.get(fighter);
-    if (body) {
-        body.setLinvel({ x: vx, y: 0, z: vz }, true);
-    }
+    if (!body) return;
+    const cur = body.linvel();
+    const K = 60; // proportional gain
+    body.resetForces(true);
+    body.addForce({ x: (vx - cur.x) * K, y: 0, z: (vz - cur.z) * K }, true);
 }
 
 export function teleportFighter(fighter, x, z, yAngle) {
@@ -123,6 +126,7 @@ export function teleportFighter(fighter, x, z, yAngle) {
     if (body) {
         body.setTranslation({ x, y: 0, z }, true);
         body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        body.resetForces(true);
         if (yAngle !== undefined) {
             const ha = yAngle / 2;
             body.setRotation(
@@ -143,24 +147,27 @@ export function promoteToPlayer(fighter) {
 
     const bd = R.RigidBodyDesc.dynamic()
         .setTranslation(pos.x, pos.y, pos.z)
-        .setLinearDamping(5.0)
+        .setLinearDamping(1.0)
         .setAngularDamping(10.0);
     const newBody = world.createRigidBody(bd);
-    newBody.setEnabledTranslations(true, false, true, true);
-    newBody.setEnabledRotations(false, false, false, true);
+    // No setEnabledTranslations/setEnabledRotations
     newBody.setRotation(rot, true);
 
     _addBlockColliders(fighter, newBody, 4.0);
     fighterBodies.set(fighter, newBody);
 }
 
+// Fix 4 + Fix 7: Sync bodyGroup rotation to Rapier + clamp Y
 export function stepAndSync() {
     if (!world) return;
 
-    // Sync facing rotations: game code → Rapier (before step)
+    // Sync facing + sweep rotations: game code → Rapier (before step)
     for (const [fighter, body] of fighterBodies) {
         if (!fighter.alive) continue;
-        const ha = fighter.group.rotation.y / 2;
+        // Include bodyGroup.rotation.y so colliders physically sweep
+        const bodyGroupY = fighter.bodyGroup ? fighter.bodyGroup.rotation.y : 0;
+        const totalAngle = fighter.group.rotation.y + bodyGroupY;
+        const ha = totalAngle / 2;
         body.setRotation(
             { x: 0, y: Math.sin(ha), z: 0, w: Math.cos(ha) },
             true
@@ -169,66 +176,16 @@ export function stepAndSync() {
 
     world.step();
 
-    // Sync positions: Rapier → Three.js (after step)
+    // Sync positions: Rapier → Three.js (after step) + clamp Y to 0
     for (const [fighter, body] of fighterBodies) {
         if (!fighter.alive) continue;
         const pos = body.translation();
+        // Clamp Y to ground plane (no gravity but collisions could nudge Y)
+        if (pos.y !== 0) {
+            body.setTranslation({ x: pos.x, y: 0, z: pos.z }, true);
+        }
         fighter.group.position.x = pos.x;
         fighter.group.position.z = pos.z;
-    }
-}
-
-/**
- * Called each frame while a fighter is mid-rotation-animation.
- * Computes block world positions using the current visual sweep angle and
- * directly nudges nearby fighter bodies outward.
- */
-export function applyRotationSweepForce(fighter) {
-    const body = fighterBodies.get(fighter);
-    if (!body) return;
-
-    const PUSH_RANGE = 1.3;
-    const PUSH_STRENGTH = 0.05;
-
-    const rotPos = body.translation();
-    // Use visual sweep angle (group facing + bodyGroup sweep)
-    const totalAngle = fighter.group.rotation.y + (fighter.bodyGroup ? fighter.bodyGroup.rotation.y : 0);
-    const cos = Math.cos(totalAngle);
-    const sin = Math.sin(totalAngle);
-    const center = getBlockCenter(fighter.blocks);
-
-    for (const [otherFighter, otherBody] of fighterBodies) {
-        if (otherFighter === fighter || !otherFighter.alive) continue;
-
-        const otherPos = otherBody.translation();
-        let closestDist = Infinity;
-        let pushX = 0, pushZ = 0;
-
-        for (const [bx, , bz] of fighter.blocks) {
-            const lx = (bx - center.x) * BLOCK_SIZE;
-            const lz = (bz - center.z) * BLOCK_SIZE;
-            const wx = rotPos.x + lx * cos + lz * sin;
-            const wz = rotPos.z + (-lx * sin + lz * cos);
-
-            const dx = otherPos.x - wx;
-            const dz = otherPos.z - wz;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-            if (dist < closestDist) {
-                closestDist = dist;
-                pushX = dx;
-                pushZ = dz;
-            }
-        }
-
-        if (closestDist < PUSH_RANGE && closestDist > 0.01) {
-            const len = Math.sqrt(pushX * pushX + pushZ * pushZ);
-            const strength = PUSH_STRENGTH * (1 - closestDist / PUSH_RANGE) / len;
-            const newX = otherPos.x + pushX * strength;
-            const newZ = otherPos.z + pushZ * strength;
-            otherBody.setTranslation({ x: newX, y: 0, z: newZ }, true);
-            otherFighter.group.position.x = newX;
-            otherFighter.group.position.z = newZ;
-        }
     }
 }
 

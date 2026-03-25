@@ -260,6 +260,8 @@ export class TetraFighter {
             if (this.rotationAnim.progress >= 1) {
                 this.bodyGroup.rotation.y = 0;
                 this.rotationAnim = null;
+                // Rebuild colliders NOW — after sweep completes, not before
+                this.justRotated = true;
             }
         }
 
@@ -340,8 +342,7 @@ export class TetraFighter {
         this._rebuildBody();
         // Start bodyGroup at the old visual orientation, then sweep to 0
         this.bodyGroup.rotation.y = -dir * Math.PI / 2;
-        // Signal Rapier to rebuild colliders to new block positions
-        this.justRotated = true;
+        // justRotated set at animation END (in update()) so colliders sweep with old layout
         // Start sweep animation
         this.rotationAnim = { dir, progress: 0, duration: 0.25 };
     }
