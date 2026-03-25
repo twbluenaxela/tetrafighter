@@ -395,6 +395,144 @@ window.addEventListener('resize', () => {
 });
 
 // ============================================================
+// MOBILE TOUCH CONTROLS
+// ============================================================
+const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+const mobileControls = document.getElementById('mobile-controls');
+const joystickZone = document.getElementById('joystick-zone');
+const joystickKnob = document.getElementById('joystick-knob');
+const btnRotateCCW = document.getElementById('btn-rotate-ccw');
+const btnRotateCW = document.getElementById('btn-rotate-cw');
+const btnSprint = document.getElementById('btn-sprint');
+
+// Joystick state
+let joystickActive = false;
+let joystickTouchId = null;
+let joystickX = 0; // -1 to 1
+let joystickY = 0; // -1 to 1
+const JOYSTICK_RADIUS = 45; // max knob travel from center
+
+// Camera swipe state (touches not on controls)
+let cameraTouchId = null;
+let cameraTouchLastX = 0;
+
+// Sprint toggle
+let mobileSprint = false;
+
+if (isMobile) {
+    mobileControls.style.display = 'block';
+
+    // Prevent default touch behaviors on the whole page
+    document.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
+
+    // --- JOYSTICK ---
+    joystickZone.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (joystickTouchId !== null) return;
+        const touch = e.changedTouches[0];
+        joystickTouchId = touch.identifier;
+        updateJoystick(touch);
+    });
+
+    joystickZone.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        for (const touch of e.changedTouches) {
+            if (touch.identifier === joystickTouchId) {
+                updateJoystick(touch);
+            }
+        }
+    });
+
+    const endJoystick = (e) => {
+        for (const touch of e.changedTouches) {
+            if (touch.identifier === joystickTouchId) {
+                joystickTouchId = null;
+                joystickX = 0;
+                joystickY = 0;
+                joystickKnob.style.transform = 'translate(0px, 0px)';
+            }
+        }
+    };
+    joystickZone.addEventListener('touchend', endJoystick);
+    joystickZone.addEventListener('touchcancel', endJoystick);
+
+    function updateJoystick(touch) {
+        const rect = joystickZone.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        let dx = touch.clientX - cx;
+        let dy = touch.clientY - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > JOYSTICK_RADIUS) {
+            dx = dx / dist * JOYSTICK_RADIUS;
+            dy = dy / dist * JOYSTICK_RADIUS;
+        }
+        joystickX = dx / JOYSTICK_RADIUS; // -1 to 1
+        joystickY = dy / JOYSTICK_RADIUS; // -1 to 1 (positive = down on screen)
+        joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+    }
+
+    // --- ROTATE BUTTONS ---
+    btnRotateCCW.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (gameRunning && playerPiece && playerPiece.alive) {
+            playerPiece.rotateBody(-1);
+        }
+    });
+    btnRotateCW.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (gameRunning && playerPiece && playerPiece.alive) {
+            playerPiece.rotateBody(1);
+        }
+    });
+
+    // --- SPRINT TOGGLE ---
+    btnSprint.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        mobileSprint = !mobileSprint;
+        btnSprint.classList.toggle('active', mobileSprint);
+    });
+
+    // --- CAMERA SWIPE (any touch on the canvas / right side) ---
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (cameraTouchId !== null) return;
+        const touch = e.changedTouches[0];
+        cameraTouchId = touch.identifier;
+        cameraTouchLastX = touch.clientX;
+    });
+
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        for (const touch of e.changedTouches) {
+            if (touch.identifier === cameraTouchId) {
+                const dx = touch.clientX - cameraTouchLastX;
+                cameraAngle -= dx * 0.005;
+                cameraTouchLastX = touch.clientX;
+            }
+        }
+    });
+
+    const endCamera = (e) => {
+        for (const touch of e.changedTouches) {
+            if (touch.identifier === cameraTouchId) {
+                cameraTouchId = null;
+            }
+        }
+    };
+    canvas.addEventListener('touchend', endCamera);
+    canvas.addEventListener('touchcancel', endCamera);
+
+    // Update controls hint for mobile
+    const controlsHint = document.getElementById('start-controls');
+    if (controlsHint) {
+        controlsHint.innerHTML =
+            'Joystick - Move &nbsp;|&nbsp; Swipe - Look &nbsp;|&nbsp; Q/E Buttons - Rotate<br>' +
+            '<span class="hint-flavor">Defeat enemies to collect their shapes and build your sculpture!</span>';
+    }
+}
+
+// ============================================================
 // PLAYER MOVEMENT
 // ============================================================
 const WALK_SPEED = 2.5;
@@ -422,12 +560,19 @@ function handlePlayerMovement(dt) {
     const forward = getScreenForward();
     const right = getScreenRight();
 
+    // Keyboard input
     if (keys['KeyW']) moveDir.add(forward);
     if (keys['KeyS']) moveDir.sub(forward);
     if (keys['KeyA']) moveDir.sub(right);
     if (keys['KeyD']) moveDir.add(right);
 
-    const isSprinting = keys['ShiftLeft'] || keys['ShiftRight'];
+    // Mobile joystick input (joystickY is inverted: screen-down = +Y but forward = -screen)
+    if (isMobile && (Math.abs(joystickX) > 0.1 || Math.abs(joystickY) > 0.1)) {
+        moveDir.add(right.clone().multiplyScalar(joystickX));
+        moveDir.sub(forward.clone().multiplyScalar(joystickY));
+    }
+
+    const isSprinting = keys['ShiftLeft'] || keys['ShiftRight'] || mobileSprint;
     const speed = isSprinting ? SPRINT_SPEED : WALK_SPEED;
 
     if (moveDir.length() > 0) {
