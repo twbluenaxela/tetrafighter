@@ -178,6 +178,60 @@ export function stepAndSync() {
     }
 }
 
+/**
+ * Called each frame while a fighter is mid-rotation-animation.
+ * Computes block world positions using the current visual sweep angle and
+ * directly nudges nearby fighter bodies outward.
+ */
+export function applyRotationSweepForce(fighter) {
+    const body = fighterBodies.get(fighter);
+    if (!body) return;
+
+    const PUSH_RANGE = 1.3;
+    const PUSH_STRENGTH = 0.05;
+
+    const rotPos = body.translation();
+    // Use visual sweep angle (group facing + bodyGroup sweep)
+    const totalAngle = fighter.group.rotation.y + (fighter.bodyGroup ? fighter.bodyGroup.rotation.y : 0);
+    const cos = Math.cos(totalAngle);
+    const sin = Math.sin(totalAngle);
+    const center = getBlockCenter(fighter.blocks);
+
+    for (const [otherFighter, otherBody] of fighterBodies) {
+        if (otherFighter === fighter || !otherFighter.alive) continue;
+
+        const otherPos = otherBody.translation();
+        let closestDist = Infinity;
+        let pushX = 0, pushZ = 0;
+
+        for (const [bx, , bz] of fighter.blocks) {
+            const lx = (bx - center.x) * BLOCK_SIZE;
+            const lz = (bz - center.z) * BLOCK_SIZE;
+            const wx = rotPos.x + lx * cos + lz * sin;
+            const wz = rotPos.z + (-lx * sin + lz * cos);
+
+            const dx = otherPos.x - wx;
+            const dz = otherPos.z - wz;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist < closestDist) {
+                closestDist = dist;
+                pushX = dx;
+                pushZ = dz;
+            }
+        }
+
+        if (closestDist < PUSH_RANGE && closestDist > 0.01) {
+            const len = Math.sqrt(pushX * pushX + pushZ * pushZ);
+            const strength = PUSH_STRENGTH * (1 - closestDist / PUSH_RANGE) / len;
+            const newX = otherPos.x + pushX * strength;
+            const newZ = otherPos.z + pushZ * strength;
+            otherBody.setTranslation({ x: newX, y: 0, z: newZ }, true);
+            otherFighter.group.position.x = newX;
+            otherFighter.group.position.z = newZ;
+        }
+    }
+}
+
 export function hasBody(fighter) {
     return fighterBodies.has(fighter);
 }

@@ -3,7 +3,6 @@ import * as THREE from 'three';
 // Tetromino shape definitions (relative block positions)
 export const SHAPES = {
     I: { blocks: [[0,0,0],[1,0,0],[2,0,0],[3,0,0]], color: 0x00bcd4, name: 'I' },
-    O: { blocks: [[0,0,0],[1,0,0],[0,0,1],[1,0,1]], color: 0xffeb3b, name: 'O' },
     T: { blocks: [[0,0,0],[1,0,0],[2,0,0],[1,0,1]], color: 0x9c27b0, name: 'T' },
     S: { blocks: [[1,0,0],[2,0,0],[0,0,1],[1,0,1]], color: 0x4caf50, name: 'S' },
     Z: { blocks: [[0,0,0],[1,0,0],[1,0,1],[2,0,1]], color: 0xf44336, name: 'Z' },
@@ -251,6 +250,19 @@ export class TetraFighter {
             this.eyes.position.y = 1.65;
         }
 
+        // Rotation sweep animation
+        if (this.rotationAnim) {
+            this.rotationAnim.progress = Math.min(1, this.rotationAnim.progress + dt / this.rotationAnim.duration);
+            const t = this.rotationAnim.progress;
+            const ease = t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
+            // bodyGroup sweeps from -90° toward 0 (showing old→new orientation)
+            this.bodyGroup.rotation.y = this.rotationAnim.dir * Math.PI / 2 * (ease - 1);
+            if (this.rotationAnim.progress >= 1) {
+                this.bodyGroup.rotation.y = 0;
+                this.rotationAnim = null;
+            }
+        }
+
         // Player-controlled pieces — WASD handled by main.js, just clamp bounds
         if (this.isPlayerControlled) {
             this.group.position.x = THREE.MathUtils.clamp(
@@ -304,10 +316,12 @@ export class TetraFighter {
     }
 
     /**
-     * Rotate the tetromino body 90° around Y axis.
+     * Rotate the tetromino body 90° around Y axis with a sweep animation.
      * dir: 1 = clockwise (E key), -1 = counter-clockwise (Q key)
      */
     rotateBody(dir) {
+        if (this.rotationAnim) return; // Can't re-trigger mid-swing
+
         const center = getBlockCenter(this.blocks);
         this.blocks = this.blocks.map(([bx, by, bz]) => {
             const rx = bx - center.x;
@@ -321,10 +335,15 @@ export class TetraFighter {
             }
         });
         this.bodyRotation += dir * Math.PI / 2;
-        this.justRotated = true;
 
-        // Rebuild body meshes
+        // Rebuild body meshes to new positions
         this._rebuildBody();
+        // Start bodyGroup at the old visual orientation, then sweep to 0
+        this.bodyGroup.rotation.y = -dir * Math.PI / 2;
+        // Signal Rapier to rebuild colliders to new block positions
+        this.justRotated = true;
+        // Start sweep animation
+        this.rotationAnim = { dir, progress: 0, duration: 0.25 };
     }
 
     _rebuildBody() {

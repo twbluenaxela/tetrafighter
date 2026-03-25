@@ -8,6 +8,7 @@ import {
     initPhysics, resetWorld, createBoundaries, createFighterBody,
     removeFighterBody, rebuildColliders, setFighterVelocity,
     teleportFighter, promoteToPlayer, stepAndSync, hasBody,
+    applyRotationSweepForce,
 } from './physics.js';
 
 // Initialize Rapier WASM before anything else
@@ -305,7 +306,7 @@ function getScreenForward() {
 function getScreenRight() {
     const fwd = getScreenForward();
     // 90° clockwise in XZ plane
-    return new THREE.Vector3(fwd.z, 0, -fwd.x);
+    return new THREE.Vector3(-fwd.z, 0, fwd.x);
 }
 
 function handlePlayerMovement(dt) {
@@ -601,6 +602,13 @@ function gameLoop() {
         if (p.justRotated) {
             rebuildColliders(p);
             p.justRotated = false;
+        }
+    });
+
+    // Rotation sweep push — applied each frame during the swing animation
+    [...bluePieces, ...redPieces].forEach(p => {
+        if (p.alive && p.rotationAnim && hasBody(p)) {
+            applyRotationSweepForce(p);
         }
     });
 
