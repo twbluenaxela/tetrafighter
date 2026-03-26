@@ -380,6 +380,13 @@ body {
     background: rgba(255,255,255,0.3);
 }
 
+.mobile-btn.rotate-btn {
+    font-size: 28px;
+    line-height: 1;
+    width: 64px;
+    height: 64px;
+}
+
 .mobile-btn.btn-sprint {
     width: auto;
     padding: 0 18px;
