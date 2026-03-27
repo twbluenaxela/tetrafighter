@@ -30,7 +30,8 @@ if (langToggle) {
 const FIELD_WIDTH = 24;
 const FIELD_LENGTH = 40;
 const PIECES_PER_TEAM = 5;
-const GAME_DURATION = 120;
+const GAME_DURATION = 60;
+const WIN_SCORE = 15;
 const SPAWN_INTERVAL = 10;
 const MAX_PIECES = 8;
 
@@ -931,8 +932,10 @@ function gameLoop() {
         playerPiece.setHighlight(true);
     }
 
-    // Check game over
-    if (gameTime <= 0 || aliveBlue === 0 || aliveRed === 0) {
+    // Check game over — first to WIN_SCORE, time runs out, or team eliminated
+    const blueArtNow = sculptureBuilder.getShapeCount('blue');
+    const redArtNow = sculptureBuilder.getShapeCount('red');
+    if (gameTime <= 0 || aliveBlue === 0 || aliveRed === 0 || blueArtNow >= WIN_SCORE || redArtNow >= WIN_SCORE) {
         endGame();
     }
 
