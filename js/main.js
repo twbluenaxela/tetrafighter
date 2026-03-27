@@ -9,9 +9,20 @@ import {
     removeFighterBody, rebuildColliders, setFighterVelocity,
     teleportFighter, promoteToPlayer, stepAndSync, hasBody,
 } from './physics.js';
+import { t, getLang, setLang, applyStaticTranslations } from './i18n.js';
 
 // Initialize Rapier WASM before anything else
 await initPhysics();
+
+// i18n: apply saved language and wire toggle
+applyStaticTranslations();
+const langToggle = document.getElementById('lang-toggle');
+if (langToggle) {
+    langToggle.addEventListener('click', () => {
+        const next = getLang() === 'en' ? 'zh-TW' : 'en';
+        setLang(next);
+    });
+}
 
 // ============================================================
 // GAME CONFIG
@@ -257,18 +268,49 @@ function playConnectionClick() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
-    // Short percussive click
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.06);
-    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
-    osc.start(audioCtx.currentTime);
-    osc.stop(audioCtx.currentTime + 0.08);
+    const now = audioCtx.currentTime;
+
+    // Layer 1: sharp snap click (high-freq burst)
+    const clickOsc = audioCtx.createOscillator();
+    const clickGain = audioCtx.createGain();
+    clickOsc.connect(clickGain);
+    clickGain.connect(audioCtx.destination);
+    clickOsc.type = 'square';
+    clickOsc.frequency.setValueAtTime(1800, now);
+    clickOsc.frequency.exponentialRampToValueAtTime(600, now + 0.015);
+    clickGain.gain.setValueAtTime(0.35, now);
+    clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+    clickOsc.start(now);
+    clickOsc.stop(now + 0.03);
+
+    // Layer 2: low thud (lego block seating)
+    const thudOsc = audioCtx.createOscillator();
+    const thudGain = audioCtx.createGain();
+    thudOsc.connect(thudGain);
+    thudGain.connect(audioCtx.destination);
+    thudOsc.type = 'sine';
+    thudOsc.frequency.setValueAtTime(180, now + 0.005);
+    thudOsc.frequency.exponentialRampToValueAtTime(60, now + 0.08);
+    thudGain.gain.setValueAtTime(0.0001, now);
+    thudGain.gain.linearRampToValueAtTime(0.25, now + 0.008);
+    thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+    thudOsc.start(now + 0.005);
+    thudOsc.stop(now + 0.1);
+
+    // Layer 3: noise burst for plastic texture
+    const bufferSize = audioCtx.sampleRate * 0.02;
+    const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.3;
+    const noiseSrc = audioCtx.createBufferSource();
+    const noiseGain = audioCtx.createGain();
+    noiseSrc.buffer = noiseBuffer;
+    noiseSrc.connect(noiseGain);
+    noiseGain.connect(audioCtx.destination);
+    noiseGain.gain.setValueAtTime(0.15, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
+    noiseSrc.start(now);
+    noiseSrc.stop(now + 0.025);
 }
 
 // ============================================================
@@ -348,7 +390,7 @@ function spawnReinforcements() {
         const bp = spawnPiece('blue');
         bluePieces.push(bp);
         createFighterBody(bp);
-        ui.notify('Blue reinforcement!');
+        ui.notify(t('blueReinforcement'));
     }
     if (redPieces.filter(p => p.alive).length < MAX_PIECES) {
         const rp = spawnPiece('red');
@@ -527,8 +569,8 @@ if (isMobile) {
     const controlsHint = document.getElementById('start-controls');
     if (controlsHint) {
         controlsHint.innerHTML =
-            'Joystick - Move &nbsp;|&nbsp; Swipe - Look &nbsp;|&nbsp; Q/E Buttons - Rotate<br>' +
-            '<span class="hint-flavor">Defeat enemies to collect their shapes and build your sculpture!</span>';
+            '<span data-i18n="controlsMobile">' + t('controlsMobile') + '</span><br>' +
+            '<span class="hint-flavor" data-i18n="controlsHint">' + t('controlsHint') + '</span>';
     }
 }
 
@@ -834,7 +876,7 @@ function gameLoop() {
             playerPiece.isPlayerControlled = true;
             playerPiece.speed = 5.0;
             promoteToPlayer(playerPiece);
-            ui.notify('Switched to another fighter!');
+            ui.notify(t('switchedFighter'));
         } else {
             playerPiece = null;
         }
@@ -939,7 +981,7 @@ function startGame() {
     ui.hideStartScreen();
     ui.hideGameOver();
     ui.showHUD();
-    ui.notify('Battle begins! Collect shapes to build your art piece!');
+    ui.notify(t('battleBegins'));
 
     // Exit pointer lock cleanly
     if (document.pointerLockElement) {

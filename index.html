@@ -9,14 +9,17 @@
 <body>
     <canvas id="game-canvas"></canvas>
 
+    <!-- Language Toggle -->
+    <button id="lang-toggle">EN | 中</button>
+
     <!-- Start Screen -->
     <div id="start-screen">
-        <h1>TETRAFIGHTER</h1>
-        <p class="subtitle">Fight. Collect. Create Art.</p>
-        <button id="start-btn">START BATTLE</button>
+        <h1 data-i18n="title">TETRAFIGHTER</h1>
+        <p class="subtitle" data-i18n="subtitle">Fight. Collect. Create Art.</p>
+        <button id="start-btn" data-i18n="startBtn">START BATTLE</button>
         <div id="start-controls">
-            WASD - Walk &nbsp;|&nbsp; SHIFT - Sprint &nbsp;|&nbsp; Mouse - Look Around &nbsp;|&nbsp; Q/E - Rotate Body<br>
-            <span class="hint-flavor">Defeat enemies to collect their shapes and build your sculpture!</span>
+            <span data-i18n="controlsDesktop">WASD - Walk &nbsp;|&nbsp; SHIFT - Sprint &nbsp;|&nbsp; Mouse - Look Around &nbsp;|&nbsp; Q/E - Rotate Body</span><br>
+            <span class="hint-flavor" data-i18n="controlsHint">Defeat enemies to collect their shapes and build your sculpture!</span>
         </div>
     </div>
 
@@ -24,7 +27,7 @@
     <div id="hud" style="display:none;">
         <div id="hud-top">
             <div class="team-info team-blue">
-                <span class="team-label">Blue Team</span>
+                <span class="team-label" data-i18n="blueTeam">Blue Team</span>
                 <span class="team-score" id="blue-score">0</span>
                 <span class="piece-count" id="blue-pieces">Fighters: 5</span>
                 <span class="art-count" id="blue-art-count">Art: 0 shapes</span>
@@ -34,7 +37,7 @@
                 <div class="timer" id="game-timer">2:00</div>
             </div>
             <div class="team-info team-red" style="text-align:right;">
-                <span class="team-label">Red Team</span>
+                <span class="team-label" data-i18n="redTeam">Red Team</span>
                 <span class="team-score" id="red-score">0</span>
                 <span class="piece-count" id="red-pieces">Fighters: 5</span>
                 <span class="art-count" id="red-art-count">Art: 0 shapes</span>
@@ -44,10 +47,10 @@
 
     <!-- Game Over -->
     <div id="game-over">
-        <h2 id="game-over-title">GAME OVER</h2>
+        <h2 id="game-over-title" data-i18n="gameOverTitle">GAME OVER</h2>
         <p class="result-text" id="game-over-text"></p>
-        <p class="showcase-hint">Camera is showcasing the art pieces...</p>
-        <button id="restart-btn">PLAY AGAIN</button>
+        <p class="showcase-hint" data-i18n="showcaseHint">Camera is showcasing the art pieces...</p>
+        <button id="restart-btn" data-i18n="restartBtn">PLAY AGAIN</button>
     </div>
 
     <!-- Notifications -->
@@ -68,7 +71,7 @@
         <div id="mobile-buttons">
             <button id="btn-rotate-ccw" class="mobile-btn rotate-btn">&#x21B6;</button>
             <button id="btn-rotate-cw" class="mobile-btn rotate-btn">&#x21B7;</button>
-            <button id="btn-sprint" class="mobile-btn btn-sprint">SPRINT</button>
+            <button id="btn-sprint" class="mobile-btn btn-sprint" data-i18n="sprintBtn">SPRINT</button>
         </div>
     </div>
 

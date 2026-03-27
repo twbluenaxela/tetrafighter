@@ -1,6 +1,7 @@
 /**
  * UI Manager — HUD, battle overlay, minimap, notifications, game-over showcase
  */
+import { t } from './i18n.js';
 
 export class UIManager {
     constructor() {
@@ -41,13 +42,13 @@ export class UIManager {
     }
 
     updatePieceCounts(blueCount, redCount) {
-        this.bluePieces.textContent = `Fighters: ${blueCount}`;
-        this.redPieces.textContent = `Fighters: ${redCount}`;
+        this.bluePieces.textContent = t('fighters', blueCount);
+        this.redPieces.textContent = t('fighters', redCount);
     }
 
     updateArtCounts(blueArt, redArt) {
-        if (this.blueArtCount) this.blueArtCount.textContent = `Art: ${blueArt} shapes`;
-        if (this.redArtCount) this.redArtCount.textContent = `Art: ${redArt} shapes`;
+        if (this.blueArtCount) this.blueArtCount.textContent = t('artShapes', blueArt);
+        if (this.redArtCount) this.redArtCount.textContent = t('artShapes', redArt);
     }
 
     updateTimer(secondsLeft) {
@@ -59,17 +60,17 @@ export class UIManager {
     showGameOver(blueWins, blueCount, redCount) {
         this.gameOver.classList.add('active');
         if (blueWins) {
-            this.gameOverTitle.textContent = 'BLUE TEAM WINS!';
+            this.gameOverTitle.textContent = t('blueWinsTitle');
             this.gameOverTitle.style.color = '#4fc3f7';
-            this.gameOverText.textContent = `Blue collected ${blueCount} shapes vs Red's ${redCount}. Admire the art!`;
+            this.gameOverText.textContent = t('blueWinsText', blueCount, redCount);
         } else if (blueCount === redCount) {
-            this.gameOverTitle.textContent = 'DRAW!';
+            this.gameOverTitle.textContent = t('drawTitle');
             this.gameOverTitle.style.color = '#aaaaaa';
-            this.gameOverText.textContent = `Both teams collected ${blueCount} shapes each!`;
+            this.gameOverText.textContent = t('drawText', blueCount);
         } else {
-            this.gameOverTitle.textContent = 'RED TEAM WINS!';
+            this.gameOverTitle.textContent = t('redWinsTitle');
             this.gameOverTitle.style.color = '#ef5350';
-            this.gameOverText.textContent = `Red collected ${redCount} shapes vs Blue's ${blueCount}. Admire the art!`;
+            this.gameOverText.textContent = t('redWinsText', redCount, blueCount);
         }
     }
 
