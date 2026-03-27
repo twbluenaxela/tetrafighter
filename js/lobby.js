@@ -32,15 +32,10 @@ export function init(gameStartCallback) {
         if (onGameStart) onGameStart({ mode: 'pve' });
     });
 
-    btnPvp.addEventListener('click', async () => {
+    btnPvp.addEventListener('click', () => {
         localStorage.setItem('tetrafighter-name', playerNameInput.value);
-        try {
-            await net.connect();
-            net.setName(playerNameInput.value || 'Player');
-            showScreen('lobby');
-        } catch {
-            showError(startScreen, t('connectionFailed'));
-        }
+        // Show lobby immediately — connect lazily when creating/joining
+        showScreen('lobby');
     });
 
     // ============================================================
@@ -54,13 +49,13 @@ export function init(gameStartCallback) {
     };
 
     tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
+        tab.addEventListener('click', async () => {
             tabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             Object.values(panels).forEach(p => p.style.display = 'none');
             panels[tab.dataset.tab].style.display = 'flex';
 
-            if (tab.dataset.tab === 'browse') {
+            if (tab.dataset.tab === 'browse' && net.isConnected()) {
                 net.listRooms();
             }
         });
@@ -88,8 +83,22 @@ export function init(gameStartCallback) {
     // Team toggles — join panel
     setupTeamToggle('join-team-blue', 'join-team-red');
 
+    // Helper: ensure connected before any server action
+    async function ensureConnected() {
+        if (net.isConnected()) return true;
+        try {
+            await net.connect();
+            net.setName(playerNameInput.value || 'Player');
+            return true;
+        } catch {
+            showError(lobbyScreen, t('connectionFailed'));
+            return false;
+        }
+    }
+
     // Create room
-    document.getElementById('btn-create-room').addEventListener('click', () => {
+    document.getElementById('btn-create-room').addEventListener('click', async () => {
+        if (!await ensureConnected()) return;
         const name = document.getElementById('create-room-name').value || undefined;
         const isPublic = btnPublic.classList.contains('active');
         const password = !isPublic ? document.getElementById('create-room-password').value || undefined : undefined;
@@ -99,7 +108,8 @@ export function init(gameStartCallback) {
     });
 
     // Join room by code
-    document.getElementById('btn-join-room').addEventListener('click', () => {
+    document.getElementById('btn-join-room').addEventListener('click', async () => {
+        if (!await ensureConnected()) return;
         const code = document.getElementById('join-code').value.trim().toUpperCase();
         if (!code) return;
         const password = document.getElementById('join-password').value || undefined;
@@ -108,12 +118,14 @@ export function init(gameStartCallback) {
     });
 
     // Join random
-    document.getElementById('btn-join-random').addEventListener('click', () => {
+    document.getElementById('btn-join-random').addEventListener('click', async () => {
+        if (!await ensureConnected()) return;
         net.joinRandom();
     });
 
     // Refresh rooms
-    document.getElementById('btn-refresh-rooms').addEventListener('click', () => {
+    document.getElementById('btn-refresh-rooms').addEventListener('click', async () => {
+        if (!await ensureConnected()) return;
         net.listRooms();
     });
 
