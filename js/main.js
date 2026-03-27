@@ -10,6 +10,7 @@ import {
     teleportFighter, promoteToPlayer, stepAndSync, hasBody,
 } from './physics.js';
 import { t, getLang, setLang, applyStaticTranslations } from './i18n.js';
+import * as lobby from './lobby.js';
 
 // Initialize Rapier WASM before anything else
 await initPhysics();
@@ -981,7 +982,10 @@ function startGame() {
         createFighterBody(p, p === playerPiece);
     });
 
-    ui.hideStartScreen();
+    // Hide all menu screens
+    document.getElementById('start-screen').style.display = 'none';
+    document.getElementById('lobby-screen').style.display = 'none';
+    document.getElementById('room-screen').style.display = 'none';
     ui.hideGameOver();
     ui.showHUD();
     ui.notify(t('battleBegins'));
@@ -1013,9 +1017,27 @@ function endGame() {
     }
 }
 
-// Event listeners
-document.getElementById('start-btn').addEventListener('click', startGame);
-document.getElementById('restart-btn').addEventListener('click', startGame);
+// Game mode state
+let gameMode = 'pve'; // 'pve' | 'pvp'
+let pvpRoomData = null;
+
+function handleGameStart(opts) {
+    gameMode = opts.mode;
+    pvpRoomData = opts.room || null;
+
+    // Hide all menu screens
+    document.getElementById('start-screen').style.display = 'none';
+    document.getElementById('lobby-screen').style.display = 'none';
+    document.getElementById('room-screen').style.display = 'none';
+
+    startGame();
+}
+
+// Initialize lobby system
+lobby.init(handleGameStart);
+
+// Restart button still works
+document.getElementById('restart-btn').addEventListener('click', () => handleGameStart({ mode: gameMode }));
 
 // Title screen eye candy — spawn some fighters that run around
 function titleScreenSetup() {

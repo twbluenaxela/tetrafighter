@@ -1,0 +1,21 @@
+{
+  "name": "tetrafighter",
+  "version": "1.0.0",
+  "description": "A 3D browser game where tetromino-shaped fighters battle. Defeat enemies to collect their shapes and build art sculptures.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://local_proxy@127.0.0.1:40647/git/twbluenaxela/tetrafighter"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ws": "^8.20.0"
+  }
+}

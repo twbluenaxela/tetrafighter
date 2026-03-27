@@ -161,25 +161,7 @@ body {
     margin-top: -20px;
 }
 
-#start-btn {
-    pointer-events: auto;
-    background: linear-gradient(135deg, #4fc3f7, #1565c0);
-    border: none;
-    color: #fff;
-    font-size: 18px;
-    font-weight: bold;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    padding: 16px 48px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: transform 0.15s, box-shadow 0.15s;
-}
-
-#start-btn:hover {
-    transform: scale(1.05);
-    box-shadow: 0 0 30px rgba(79, 195, 247, 0.4);
-}
+/* (mode buttons replace old start-btn — see .mode-btn) */
 
 #start-controls {
     margin-top: 20px;
@@ -195,6 +177,437 @@ body {
     opacity: 0.7;
     font-style: italic;
     letter-spacing: 1px;
+}
+
+/* Player name input */
+.player-name-row {
+    margin-top: -10px;
+}
+
+.player-name-row input {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #fff;
+    padding: 10px 20px;
+    font-size: 16px;
+    border-radius: 8px;
+    text-align: center;
+    width: 220px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.player-name-row input:focus {
+    border-color: rgba(79,195,247,0.5);
+}
+
+.player-name-row input::placeholder {
+    color: rgba(255,255,255,0.3);
+}
+
+/* Mode buttons */
+.mode-buttons {
+    display: flex;
+    gap: 16px;
+}
+
+.mode-btn {
+    pointer-events: auto;
+    background: linear-gradient(135deg, #4fc3f7, #1565c0);
+    border: none;
+    color: #fff;
+    font-size: 16px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 14px 36px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.mode-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 25px rgba(79,195,247,0.4);
+}
+
+.mode-btn-alt {
+    background: linear-gradient(135deg, #e040fb, #7b1fa2);
+}
+
+.mode-btn-alt:hover {
+    box-shadow: 0 0 25px rgba(224,64,251,0.4);
+}
+
+/* ============================================================
+   LOBBY SCREEN
+   ============================================================ */
+#lobby-screen, #room-screen {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 100;
+    background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a15 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 40px;
+    gap: 16px;
+    overflow-y: auto;
+}
+
+#lobby-screen h1, #room-screen h1 {
+    font-size: 48px;
+    font-weight: 900;
+    letter-spacing: 6px;
+    background: linear-gradient(135deg, #4fc3f7, #e040fb, #ef5350);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+#lobby-screen .subtitle {
+    font-size: 14px;
+    opacity: 0.5;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-top: -8px;
+}
+
+/* Lobby tabs */
+.lobby-tabs {
+    display: flex;
+    gap: 0;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.15);
+}
+
+.lobby-tab {
+    background: rgba(255,255,255,0.04);
+    border: none;
+    color: rgba(255,255,255,0.5);
+    padding: 10px 24px;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+.lobby-tab:not(:last-child) {
+    border-right: 1px solid rgba(255,255,255,0.1);
+}
+
+.lobby-tab.active {
+    background: rgba(79,195,247,0.15);
+    color: #4fc3f7;
+}
+
+.lobby-tab:hover:not(.active) {
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+}
+
+/* Lobby panels */
+.lobby-panel {
+    width: 380px;
+    max-width: 90vw;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-group label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    opacity: 0.5;
+}
+
+.form-group input {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #fff;
+    padding: 10px 14px;
+    font-size: 14px;
+    border-radius: 6px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+    border-color: rgba(79,195,247,0.5);
+}
+
+.form-group input::placeholder {
+    color: rgba(255,255,255,0.25);
+}
+
+/* Toggle buttons (public/private, team) */
+.toggle-row {
+    display: flex;
+    gap: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.15);
+}
+
+.toggle-btn {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    border: none;
+    color: rgba(255,255,255,0.5);
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+.toggle-btn.active {
+    background: rgba(79,195,247,0.15);
+    color: #4fc3f7;
+}
+
+.toggle-btn.team-toggle.blue.active {
+    background: rgba(79,195,247,0.2);
+    color: #4fc3f7;
+}
+
+.toggle-btn.team-toggle.red.active {
+    background: rgba(239,83,80,0.2);
+    color: #ef5350;
+}
+
+/* Action buttons */
+.action-btn {
+    pointer-events: auto;
+    background: linear-gradient(135deg, #4fc3f7, #1565c0);
+    border: none;
+    color: #fff;
+    font-size: 15px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 12px 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    margin-top: 4px;
+}
+
+.action-btn:hover {
+    transform: scale(1.03);
+    box-shadow: 0 0 20px rgba(79,195,247,0.3);
+}
+
+.action-btn-alt {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.action-btn-alt:hover {
+    background: rgba(255,255,255,0.12);
+    box-shadow: none;
+}
+
+.back-btn {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.4);
+    font-size: 14px;
+    cursor: pointer;
+    margin-top: 12px;
+    padding: 8px 16px;
+    transition: color 0.2s;
+}
+
+.back-btn:hover {
+    color: #fff;
+}
+
+/* Room list (browse) */
+.room-list {
+    max-height: 260px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.room-list-empty {
+    text-align: center;
+    opacity: 0.4;
+    font-style: italic;
+    padding: 30px 0;
+}
+
+.room-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.room-list-item:hover {
+    background: rgba(255,255,255,0.08);
+}
+
+.room-list-item .room-item-name {
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.room-list-item .room-item-info {
+    font-size: 12px;
+    opacity: 0.5;
+}
+
+.room-list-item .room-item-join {
+    background: rgba(79,195,247,0.2);
+    border: 1px solid rgba(79,195,247,0.4);
+    color: #4fc3f7;
+    padding: 4px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+/* ============================================================
+   ROOM WAITING SCREEN
+   ============================================================ */
+.room-header {
+    text-align: center;
+}
+
+.room-header h2 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.room-code-display {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 13px;
+    opacity: 0.6;
+}
+
+.code-value {
+    font-family: monospace;
+    font-size: 18px;
+    font-weight: bold;
+    letter-spacing: 3px;
+    color: #4fc3f7;
+    opacity: 1;
+}
+
+.copy-btn {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #ccc;
+    padding: 3px 10px;
+    font-size: 11px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.copy-btn:hover {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+}
+
+.room-teams {
+    display: flex;
+    gap: 24px;
+    width: 500px;
+    max-width: 90vw;
+}
+
+.room-team {
+    flex: 1;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 16px;
+    min-height: 150px;
+}
+
+.room-team h3 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+}
+
+.room-team-blue h3 { color: #4fc3f7; }
+.room-team-red h3 { color: #ef5350; }
+
+.room-team-blue {
+    border-color: rgba(79,195,247,0.2);
+}
+
+.room-team-red {
+    border-color: rgba(239,83,80,0.2);
+}
+
+.room-team ul {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.room-team li {
+    font-size: 14px;
+    padding: 6px 10px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 4px;
+}
+
+.room-team li.is-host::after {
+    content: ' (Host)';
+    font-size: 11px;
+    opacity: 0.5;
+}
+
+.room-team li.is-you {
+    border: 1px solid rgba(79,195,247,0.3);
+}
+
+.room-actions {
+    display: flex;
+    gap: 12px;
+}
+
+/* Error toast */
+.lobby-error {
+    background: rgba(239,83,80,0.15);
+    border: 1px solid rgba(239,83,80,0.4);
+    color: #ef5350;
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    animation: notif-in 0.3s ease-out;
 }
 
 /* Language toggle */

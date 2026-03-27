@@ -25,6 +25,35 @@ const translations = {
         switchedFighter: 'Switched to another fighter!',
         battleBegins: 'Battle begins! First to 15 shapes wins!',
         sprintBtn: 'SPRINT',
+        // Lobby / Multiplayer
+        namePlaceholder: 'Your Name',
+        pveBtn: 'PLAY vs AI',
+        pvpBtn: 'PLAY vs PLAYERS',
+        pvpLobby: 'Multiplayer Lobby',
+        createRoom: 'Create Room',
+        joinRoom: 'Join Room',
+        browseRooms: 'Browse',
+        roomName: 'Room Name',
+        visibility: 'Visibility',
+        public: 'Public',
+        private: 'Private',
+        password: 'Password (optional)',
+        yourTeam: 'Your Team',
+        createRoomBtn: 'CREATE ROOM',
+        inviteCode: 'Invite Code',
+        joinRoomBtn: 'JOIN ROOM',
+        joinRandomBtn: 'JOIN RANDOM ROOM',
+        noRooms: 'No public rooms available',
+        refreshBtn: 'REFRESH',
+        backBtn: '\u2190 Back',
+        codeLabel: 'Code:',
+        copy: 'Copy',
+        copyLink: 'Copy Invite Link',
+        switchTeam: 'Switch Team',
+        startGame: 'START GAME',
+        leaveRoom: '\u2190 Leave Room',
+        connectionFailed: 'Could not connect to server',
+        enterPassword: 'Enter room password:',
     },
     'zh-TW': {
         title: 'TETRAFIGHTER',
@@ -50,6 +79,35 @@ const translations = {
         switchedFighter: '已切換到另一位戰士！',
         battleBegins: '戰鬥開始！先收集 15 個形狀的隊伍獲勝！',
         sprintBtn: '衝刺',
+        // Lobby / Multiplayer
+        namePlaceholder: '你的名字',
+        pveBtn: '對戰電腦',
+        pvpBtn: '對戰玩家',
+        pvpLobby: '多人大廳',
+        createRoom: '建立房間',
+        joinRoom: '加入房間',
+        browseRooms: '瀏覽',
+        roomName: '房間名稱',
+        visibility: '可見性',
+        public: '公開',
+        private: '私人',
+        password: '密碼（選填）',
+        yourTeam: '你的隊伍',
+        createRoomBtn: '建立房間',
+        inviteCode: '邀請碼',
+        joinRoomBtn: '加入房間',
+        joinRandomBtn: '隨機加入房間',
+        noRooms: '目前沒有公開房間',
+        refreshBtn: '重新整理',
+        backBtn: '\u2190 返回',
+        codeLabel: '代碼：',
+        copy: '複製',
+        copyLink: '複製邀請連結',
+        switchTeam: '切換隊伍',
+        startGame: '開始遊戲',
+        leaveRoom: '\u2190 離開房間',
+        connectionFailed: '無法連接伺服器',
+        enterPassword: '請輸入房間密碼：',
     },
 };
 
@@ -82,5 +140,9 @@ export function applyStaticTranslations() {
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
         el.textContent = t(key);
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        el.placeholder = t(key);
     });
 }

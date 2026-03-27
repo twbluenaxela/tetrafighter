@@ -12,15 +12,129 @@
     <!-- Language Toggle -->
     <button id="lang-toggle">EN | 中</button>
 
-    <!-- Start Screen -->
+    <!-- Start Screen — Mode Select -->
     <div id="start-screen">
         <h1 data-i18n="title">TETRAFIGHTER</h1>
         <p class="subtitle" data-i18n="subtitle">Fight. Collect. Create Art.</p>
-        <button id="start-btn" data-i18n="startBtn">START BATTLE</button>
+
+        <!-- Player Name -->
+        <div class="player-name-row">
+            <input type="text" id="player-name" placeholder="Your Name" maxlength="20" data-i18n-placeholder="namePlaceholder">
+        </div>
+
+        <!-- Mode Buttons -->
+        <div class="mode-buttons">
+            <button id="btn-pve" class="mode-btn" data-i18n="pveBtn">PLAY vs AI</button>
+            <button id="btn-pvp" class="mode-btn mode-btn-alt" data-i18n="pvpBtn">PLAY vs PLAYERS</button>
+        </div>
+
         <div id="start-controls">
             <span data-i18n="controlsDesktop">WASD - Walk &nbsp;|&nbsp; SHIFT - Sprint &nbsp;|&nbsp; Mouse - Look Around &nbsp;|&nbsp; Q/E - Rotate Body</span><br>
             <span class="hint-flavor" data-i18n="controlsHint">Defeat enemies to collect their shapes and build your sculpture!</span>
         </div>
+    </div>
+
+    <!-- PvP Lobby Screen -->
+    <div id="lobby-screen" style="display:none;">
+        <h1 data-i18n="title">TETRAFIGHTER</h1>
+        <p class="subtitle" data-i18n="pvpLobby">Multiplayer Lobby</p>
+
+        <!-- Lobby Tabs -->
+        <div class="lobby-tabs">
+            <button class="lobby-tab active" data-tab="create" data-i18n="createRoom">Create Room</button>
+            <button class="lobby-tab" data-tab="join" data-i18n="joinRoom">Join Room</button>
+            <button class="lobby-tab" data-tab="browse" data-i18n="browseRooms">Browse</button>
+        </div>
+
+        <!-- Create Room Panel -->
+        <div class="lobby-panel" id="panel-create">
+            <div class="form-group">
+                <label data-i18n="roomName">Room Name</label>
+                <input type="text" id="create-room-name" placeholder="My Room" maxlength="30">
+            </div>
+            <div class="form-group">
+                <label data-i18n="visibility">Visibility</label>
+                <div class="toggle-row">
+                    <button class="toggle-btn active" id="btn-public" data-i18n="public">Public</button>
+                    <button class="toggle-btn" id="btn-private" data-i18n="private">Private</button>
+                </div>
+            </div>
+            <div class="form-group" id="password-group" style="display:none;">
+                <label data-i18n="password">Password (optional)</label>
+                <input type="password" id="create-room-password" placeholder="Leave empty for no password" maxlength="20">
+            </div>
+            <div class="form-group">
+                <label data-i18n="yourTeam">Your Team</label>
+                <div class="toggle-row">
+                    <button class="toggle-btn team-toggle blue active" id="create-team-blue" data-i18n="blueTeam">Blue Team</button>
+                    <button class="toggle-btn team-toggle red" id="create-team-red" data-i18n="redTeam">Red Team</button>
+                </div>
+            </div>
+            <button id="btn-create-room" class="action-btn" data-i18n="createRoomBtn">CREATE ROOM</button>
+        </div>
+
+        <!-- Join Room Panel -->
+        <div class="lobby-panel" id="panel-join" style="display:none;">
+            <div class="form-group">
+                <label data-i18n="inviteCode">Invite Code</label>
+                <input type="text" id="join-code" placeholder="ABC123" maxlength="6" style="text-transform:uppercase;">
+            </div>
+            <div class="form-group" id="join-password-group" style="display:none;">
+                <label data-i18n="password">Password</label>
+                <input type="password" id="join-password" maxlength="20">
+            </div>
+            <div class="form-group">
+                <label data-i18n="yourTeam">Your Team</label>
+                <div class="toggle-row">
+                    <button class="toggle-btn team-toggle blue" id="join-team-blue" data-i18n="blueTeam">Blue Team</button>
+                    <button class="toggle-btn team-toggle red active" id="join-team-red" data-i18n="redTeam">Red Team</button>
+                </div>
+            </div>
+            <button id="btn-join-room" class="action-btn" data-i18n="joinRoomBtn">JOIN ROOM</button>
+            <button id="btn-join-random" class="action-btn action-btn-alt" data-i18n="joinRandomBtn">JOIN RANDOM ROOM</button>
+        </div>
+
+        <!-- Browse Rooms Panel -->
+        <div class="lobby-panel" id="panel-browse" style="display:none;">
+            <div id="room-list" class="room-list">
+                <p class="room-list-empty" data-i18n="noRooms">No public rooms available</p>
+            </div>
+            <button id="btn-refresh-rooms" class="action-btn action-btn-alt" data-i18n="refreshBtn">REFRESH</button>
+        </div>
+
+        <button id="btn-back-to-menu" class="back-btn" data-i18n="backBtn">&larr; Back</button>
+    </div>
+
+    <!-- Room Waiting Screen -->
+    <div id="room-screen" style="display:none;">
+        <h1 data-i18n="title">TETRAFIGHTER</h1>
+        <div class="room-header">
+            <h2 id="room-title">Room Name</h2>
+            <div class="room-code-display">
+                <span data-i18n="codeLabel">Code:</span>
+                <span id="room-code" class="code-value">------</span>
+                <button id="btn-copy-code" class="copy-btn" data-i18n="copy">Copy</button>
+                <button id="btn-copy-link" class="copy-btn" data-i18n="copyLink">Copy Invite Link</button>
+            </div>
+        </div>
+
+        <div class="room-teams">
+            <div class="room-team room-team-blue">
+                <h3 data-i18n="blueTeam">Blue Team</h3>
+                <ul id="blue-player-list"></ul>
+            </div>
+            <div class="room-team room-team-red">
+                <h3 data-i18n="redTeam">Red Team</h3>
+                <ul id="red-player-list"></ul>
+            </div>
+        </div>
+
+        <div class="room-actions">
+            <button id="btn-switch-team" class="action-btn action-btn-alt" data-i18n="switchTeam">Switch Team</button>
+            <button id="btn-start-pvp" class="action-btn" data-i18n="startGame" style="display:none;">START GAME</button>
+        </div>
+
+        <button id="btn-leave-room" class="back-btn" data-i18n="leaveRoom">&larr; Leave Room</button>
     </div>
 
     <!-- HUD -->
@@ -34,7 +148,7 @@
             </div>
             <div id="round-info">
                 <div class="round-number">TetraFighter</div>
-                <div class="timer" id="game-timer">2:00</div>
+                <div class="timer" id="game-timer">1:00</div>
             </div>
             <div class="team-info team-red" style="text-align:right;">
                 <span class="team-label" data-i18n="redTeam">Red Team</span>
