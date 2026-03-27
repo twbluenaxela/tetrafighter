@@ -23,7 +23,7 @@ const translations = {
         restartBtn: 'PLAY AGAIN',
         blueReinforcement: 'Blue reinforcement!',
         switchedFighter: 'Switched to another fighter!',
-        battleBegins: 'Battle begins! First to 15 shapes wins!',
+        battleBegins: 'Battle begins! First to 15 shapes or highest score in 3 minutes wins!',
         sprintBtn: 'SPRINT',
         // Lobby / Multiplayer
         namePlaceholder: 'Your Name',
@@ -85,7 +85,7 @@ const translations = {
         restartBtn: '再玩一次',
         blueReinforcement: '藍隊增援！',
         switchedFighter: '已切換到另一位戰士！',
-        battleBegins: '戰鬥開始！先收集 15 個形狀的隊伍獲勝！',
+        battleBegins: '戰鬥開始！先收集 15 個形狀或 3 分鐘內最高分的隊伍獲勝！',
         sprintBtn: '衝刺',
         // Lobby / Multiplayer
         namePlaceholder: '你的名字',

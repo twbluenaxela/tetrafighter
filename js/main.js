@@ -32,7 +32,7 @@ if (langToggle) {
 const FIELD_WIDTH = 24;
 const FIELD_LENGTH = 40;
 const PIECES_PER_TEAM = 5;
-const GAME_DURATION = 60;
+const GAME_DURATION = 180;
 const WIN_SCORE = 15;
 const SPAWN_INTERVAL = 10;
 const MAX_PIECES = 8;
