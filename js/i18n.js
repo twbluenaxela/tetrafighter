@@ -61,6 +61,7 @@ const translations = {
         restartMatch: 'RESTART MATCH',
         quitToMenu: 'QUIT TO MENU',
         rematch: 'REMATCH',
+        waitingForHost: 'Waiting for host...',
     },
     'zh-TW': {
         title: 'TETRAFIGHTER',
@@ -122,6 +123,7 @@ const translations = {
         restartMatch: '重新開始',
         quitToMenu: '退出至選單',
         rematch: '再來一局',
+        waitingForHost: '等待房主決定⋯',
     },
 };
 

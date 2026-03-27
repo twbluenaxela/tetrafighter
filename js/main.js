@@ -11,6 +11,7 @@ import {
 } from './physics.js';
 import { t, getLang, setLang, applyStaticTranslations } from './i18n.js';
 import * as lobby from './lobby.js';
+import * as net from './network.js';
 
 // Initialize Rapier WASM before anything else
 await initPhysics();
@@ -1041,6 +1042,24 @@ function endGame() {
     showcaseTimer = 0;
     showcaseTeam = blueWins ? 'blue' : 'red';
 
+    // Show/hide rematch button based on mode
+    const btnRematch = document.getElementById('btn-rematch');
+    const rematchWaiting = document.getElementById('rematch-waiting');
+    const btnQuit = document.getElementById('btn-quit-to-menu');
+
+    if (gameMode === 'pve') {
+        // PvE: always show rematch, quit goes to menu
+        btnRematch.style.display = 'inline-block';
+        rematchWaiting.style.display = 'none';
+        btnQuit.textContent = t('quitToMenu');
+    } else {
+        // PvP: host sees rematch, others see "waiting for host"
+        const isHost = pvpRoomData && pvpRoomData.host === net.getMyId();
+        btnRematch.style.display = isHost ? 'inline-block' : 'none';
+        rematchWaiting.style.display = isHost ? 'none' : 'block';
+        btnQuit.textContent = t('quitToMenu');
+    }
+
     // Exit pointer lock for menu interaction
     if (document.pointerLockElement) {
         document.exitPointerLock();
@@ -1126,7 +1145,12 @@ window.addEventListener('keydown', (e) => {
 // GAME OVER BUTTONS
 // ============================================================
 document.getElementById('btn-rematch').addEventListener('click', () => {
-    handleGameStart({ mode: gameMode });
+    if (gameMode === 'pvp') {
+        // Host sends rematch request to server, which broadcasts game_start
+        net.requestRematch();
+    } else {
+        handleGameStart({ mode: gameMode });
+    }
 });
 document.getElementById('btn-quit-to-menu').addEventListener('click', () => {
     ui.hideGameOver();

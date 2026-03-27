@@ -362,6 +362,17 @@ wss.on('connection', (ws) => {
                 break;
             }
 
+            case 'request_rematch': {
+                const room = rooms.get(client.roomCode);
+                if (!room || room.host !== client.id) return;
+                room.state = 'playing';
+                broadcastToRoom(room, {
+                    type: 'game_start',
+                    room: getRoomSummary(room),
+                });
+                break;
+            }
+
             // === GAME STATE RELAY ===
             case 'game_state': {
                 // Relay player's state to all others in room
