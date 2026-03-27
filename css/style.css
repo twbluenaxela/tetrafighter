@@ -720,19 +720,42 @@ body {
     margin-top: -8px;
 }
 
-#restart-btn {
-    pointer-events: auto;
-    background: linear-gradient(135deg, #4fc3f7, #1565c0);
-    border: none;
-    color: #fff;
-    font-size: 16px;
-    font-weight: bold;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    padding: 14px 40px;
-    border-radius: 8px;
-    cursor: pointer;
+.game-over-buttons {
+    display: flex;
+    gap: 12px;
     margin-top: 10px;
+    pointer-events: auto;
+}
+
+/* Pause menu */
+#pause-menu {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 200;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pause-panel {
+    background: radial-gradient(ellipse at center, #1a1a2e, #0a0a15);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 40px 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    min-width: 280px;
+}
+
+.pause-panel h2 {
+    font-size: 32px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    margin-bottom: 8px;
 }
 
 /* Notifications */

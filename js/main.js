@@ -875,6 +875,11 @@ function gameLoop() {
         return;
     }
 
+    if (paused) {
+        renderer.render(scene, camera);
+        return;
+    }
+
     if (!gameRunning) {
         // Title screen — slow orbit
         const t = Date.now() * 0.0002;
@@ -1061,8 +1066,78 @@ function handleGameStart(opts) {
 // Initialize lobby system
 lobby.init(handleGameStart);
 
-// Restart button still works
-document.getElementById('restart-btn').addEventListener('click', () => handleGameStart({ mode: gameMode }));
+// ============================================================
+// PAUSE MENU
+// ============================================================
+let paused = false;
+const pauseMenu = document.getElementById('pause-menu');
+const btnResume = document.getElementById('btn-resume');
+const btnRestartMatch = document.getElementById('btn-restart-match');
+const btnPauseQuit = document.getElementById('btn-pause-quit');
+
+function showPauseMenu() {
+    if (!gameRunning || paused) return;
+    paused = true;
+    pauseMenu.style.display = 'flex';
+    // Show restart only in PvE
+    btnRestartMatch.style.display = gameMode === 'pve' ? 'inline-block' : 'none';
+    if (document.pointerLockElement) document.exitPointerLock();
+}
+
+function hidePauseMenu() {
+    paused = false;
+    pauseMenu.style.display = 'none';
+}
+
+function quitToMenu() {
+    hidePauseMenu();
+    gameRunning = false;
+    showcaseMode = false;
+    ui.hideHUD();
+    ui.hideGameOver();
+    // Clean up pieces
+    [...bluePieces, ...redPieces].forEach(p => { if (p.alive) p.destroy(); });
+    bluePieces = [];
+    redPieces = [];
+    document.getElementById('start-screen').style.display = 'flex';
+    if (document.pointerLockElement) document.exitPointerLock();
+}
+
+btnResume.addEventListener('click', hidePauseMenu);
+btnRestartMatch.addEventListener('click', () => {
+    hidePauseMenu();
+    handleGameStart({ mode: gameMode });
+});
+btnPauseQuit.addEventListener('click', quitToMenu);
+
+// Escape key
+window.addEventListener('keydown', (e) => {
+    if (e.code !== 'Escape') return;
+    // If game-over screen is showing, ignore escape
+    if (document.getElementById('game-over').classList.contains('active')) return;
+    if (paused) {
+        hidePauseMenu();
+    } else if (gameRunning) {
+        showPauseMenu();
+    }
+});
+
+// ============================================================
+// GAME OVER BUTTONS
+// ============================================================
+document.getElementById('btn-rematch').addEventListener('click', () => {
+    handleGameStart({ mode: gameMode });
+});
+document.getElementById('btn-quit-to-menu').addEventListener('click', () => {
+    ui.hideGameOver();
+    showcaseMode = false;
+    // Clean up pieces
+    [...bluePieces, ...redPieces].forEach(p => { if (p.alive) p.destroy(); });
+    bluePieces = [];
+    redPieces = [];
+    document.getElementById('start-screen').style.display = 'flex';
+    if (document.pointerLockElement) document.exitPointerLock();
+});
 
 // Title screen eye candy — spawn some fighters that run around
 function titleScreenSetup() {

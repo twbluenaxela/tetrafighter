@@ -55,6 +55,12 @@ const translations = {
         connectionFailed: 'Could not connect to server',
         enterPassword: 'Enter room password:',
         teamFull: 'Team is full (max 5)',
+        // Pause / Game Over
+        paused: 'PAUSED',
+        resume: 'RESUME',
+        restartMatch: 'RESTART MATCH',
+        quitToMenu: 'QUIT TO MENU',
+        rematch: 'REMATCH',
     },
     'zh-TW': {
         title: 'TETRAFIGHTER',
@@ -110,6 +116,12 @@ const translations = {
         connectionFailed: '無法連接伺服器',
         enterPassword: '請輸入房間密碼：',
         teamFull: '隊伍已滿（上限 5 人）',
+        // Pause / Game Over
+        paused: '暫停',
+        resume: '繼續',
+        restartMatch: '重新開始',
+        quitToMenu: '退出至選單',
+        rematch: '再來一局',
     },
 };
 

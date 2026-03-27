@@ -178,7 +178,20 @@
         <h2 id="game-over-title" data-i18n="gameOverTitle">GAME OVER</h2>
         <p class="result-text" id="game-over-text"></p>
         <p class="showcase-hint" data-i18n="showcaseHint">Camera is showcasing the art pieces...</p>
-        <button id="restart-btn" data-i18n="restartBtn">PLAY AGAIN</button>
+        <div class="game-over-buttons">
+            <button id="btn-rematch" class="action-btn" data-i18n="rematch">REMATCH</button>
+            <button id="btn-quit-to-menu" class="action-btn action-btn-alt" data-i18n="quitToMenu">QUIT TO MENU</button>
+        </div>
+    </div>
+
+    <!-- Pause Menu -->
+    <div id="pause-menu" style="display:none;">
+        <div class="pause-panel">
+            <h2 data-i18n="paused">PAUSED</h2>
+            <button id="btn-resume" class="action-btn" data-i18n="resume">RESUME</button>
+            <button id="btn-restart-match" class="action-btn action-btn-alt" data-i18n="restartMatch">RESTART MATCH</button>
+            <button id="btn-pause-quit" class="action-btn action-btn-alt" data-i18n="quitToMenu">QUIT TO MENU</button>
+        </div>
     </div>
 
     <!-- Notifications -->
