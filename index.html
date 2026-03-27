@@ -120,12 +120,26 @@
 
         <div class="room-teams">
             <div class="room-team room-team-blue">
-                <h3 data-i18n="blueTeam">Blue Team</h3>
+                <div class="team-header">
+                    <h3 data-i18n="blueTeam">Blue Team</h3>
+                    <span class="team-count" id="blue-team-count">0/5</span>
+                </div>
                 <ul id="blue-player-list"></ul>
+                <div class="ai-controls" id="blue-ai-controls" style="display:none;">
+                    <button class="ai-btn" id="btn-add-ai-blue" title="Add AI">+ AI</button>
+                    <button class="ai-btn" id="btn-remove-ai-blue" title="Remove AI">- AI</button>
+                </div>
             </div>
             <div class="room-team room-team-red">
-                <h3 data-i18n="redTeam">Red Team</h3>
+                <div class="team-header">
+                    <h3 data-i18n="redTeam">Red Team</h3>
+                    <span class="team-count" id="red-team-count">0/5</span>
+                </div>
                 <ul id="red-player-list"></ul>
+                <div class="ai-controls" id="red-ai-controls" style="display:none;">
+                    <button class="ai-btn" id="btn-add-ai-red" title="Add AI">+ AI</button>
+                    <button class="ai-btn" id="btn-remove-ai-red" title="Remove AI">- AI</button>
+                </div>
             </div>
         </div>
 

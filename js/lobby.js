@@ -170,6 +170,12 @@ export function init(gameStartCallback) {
         net.startGame();
     });
 
+    // AI controls
+    document.getElementById('btn-add-ai-blue').addEventListener('click', () => net.addAI('blue'));
+    document.getElementById('btn-remove-ai-blue').addEventListener('click', () => net.removeAI('blue'));
+    document.getElementById('btn-add-ai-red').addEventListener('click', () => net.addAI('red'));
+    document.getElementById('btn-remove-ai-red').addEventListener('click', () => net.removeAI('red'));
+
     document.getElementById('btn-leave-room').addEventListener('click', () => {
         net.leaveRoom();
         showScreen('lobby');
@@ -262,20 +268,33 @@ function updateRoomScreen(room, myId) {
     blueList.innerHTML = '';
     redList.innerHTML = '';
 
+    let blueCount = 0, redCount = 0;
+
     for (const p of room.players) {
         const li = document.createElement('li');
         li.textContent = p.name;
+        if (p.isAI) li.classList.add('is-ai');
         if (p.id === room.host) li.classList.add('is-host');
         if (p.id === myId) li.classList.add('is-you');
 
-        if (p.team === 'blue') blueList.appendChild(li);
-        else redList.appendChild(li);
+        if (p.team === 'blue') {
+            blueList.appendChild(li);
+            blueCount++;
+        } else {
+            redList.appendChild(li);
+            redCount++;
+        }
     }
 
-    // Show start button only for host
+    // Team counts
+    document.getElementById('blue-team-count').textContent = `${blueCount}/5`;
+    document.getElementById('red-team-count').textContent = `${redCount}/5`;
+
+    // Show AI controls and start button only for host
     const isHost = room.host === myId;
-    const startBtn = document.getElementById('btn-start-pvp');
-    startBtn.style.display = isHost ? 'inline-block' : 'none';
+    document.getElementById('blue-ai-controls').style.display = isHost ? 'flex' : 'none';
+    document.getElementById('red-ai-controls').style.display = isHost ? 'flex' : 'none';
+    document.getElementById('btn-start-pvp').style.display = isHost ? 'inline-block' : 'none';
 }
 
 function renderRoomList(rooms) {

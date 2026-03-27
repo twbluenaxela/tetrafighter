@@ -54,6 +54,7 @@ const translations = {
         leaveRoom: '\u2190 Leave Room',
         connectionFailed: 'Could not connect to server',
         enterPassword: 'Enter room password:',
+        teamFull: 'Team is full (max 5)',
     },
     'zh-TW': {
         title: 'TETRAFIGHTER',
@@ -108,6 +109,7 @@ const translations = {
         leaveRoom: '\u2190 離開房間',
         connectionFailed: '無法連接伺服器',
         enterPassword: '請輸入房間密碼：',
+        teamFull: '隊伍已滿（上限 5 人）',
     },
 };
 

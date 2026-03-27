@@ -88,6 +88,8 @@ export function switchTeam() { send({ type: 'switch_team' }); }
 export function leaveRoom() { send({ type: 'leave_room' }); }
 export function listRooms() { send({ type: 'list_rooms' }); }
 export function startGame() { send({ type: 'start_game' }); }
+export function addAI(team) { send({ type: 'add_ai', team }); }
+export function removeAI(team) { send({ type: 'remove_ai', team }); }
 export function sendGameState(state) { send({ type: 'game_state', state }); }
 export function sendGameEvent(event) { send({ type: 'game_event', event }); }
 

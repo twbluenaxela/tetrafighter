@@ -594,6 +594,56 @@ body {
     border: 1px solid rgba(79,195,247,0.3);
 }
 
+.room-team li.is-ai {
+    opacity: 0.6;
+    font-style: italic;
+}
+
+.room-team li.is-ai::before {
+    content: '\1F916 ';
+}
+
+.team-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.team-header h3 {
+    margin-bottom: 0;
+}
+
+.team-count {
+    font-size: 12px;
+    opacity: 0.5;
+    font-weight: bold;
+}
+
+.ai-controls {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.ai-btn {
+    flex: 1;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.6);
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: bold;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+.ai-btn:hover {
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+}
+
 .room-actions {
     display: flex;
     gap: 12px;

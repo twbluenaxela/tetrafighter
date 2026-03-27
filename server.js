@@ -76,6 +76,8 @@ function createRoom({ name, isPublic, password, hostId }) {
     return room;
 }
 
+const MAX_TEAM_SIZE = 5;
+
 function getRoomSummary(room) {
     return {
         code: room.code,
@@ -89,8 +91,13 @@ function getRoomSummary(room) {
             id: p.id,
             name: p.name,
             team: p.team,
+            isAI: p.isAI || false,
         })),
     };
+}
+
+function teamCount(room, team) {
+    return room.players.filter(p => p.team === team).length;
 }
 
 function getPublicRoomList() {
@@ -119,7 +126,9 @@ function removePlayerFromRoom(playerId) {
 
         room.players.splice(idx, 1);
 
-        if (room.players.length === 0) {
+        // Delete room if no real players left (AI-only rooms don't make sense)
+        const hasHumans = room.players.some(p => !p.isAI);
+        if (!hasHumans) {
             rooms.delete(code);
             return;
         }
@@ -207,6 +216,10 @@ wss.on('connection', (ws) => {
                 removePlayerFromRoom(client.id);
 
                 const team = msg.team || 'red';
+                if (teamCount(room, team) >= MAX_TEAM_SIZE) {
+                    ws.send(JSON.stringify({ type: 'error', message: 'Team is full (max 5)' }));
+                    return;
+                }
                 room.players.push({ id: client.id, name: client.name, team, ws });
                 client.roomCode = room.code;
 
@@ -261,12 +274,59 @@ wss.on('connection', (ws) => {
                 if (!room) return;
                 const player = room.players.find(p => p.id === client.id);
                 if (player) {
-                    player.team = player.team === 'blue' ? 'red' : 'blue';
+                    const targetTeam = player.team === 'blue' ? 'red' : 'blue';
+                    if (teamCount(room, targetTeam) >= MAX_TEAM_SIZE) {
+                        ws.send(JSON.stringify({ type: 'error', message: 'Team is full (max 5)' }));
+                        return;
+                    }
+                    player.team = targetTeam;
                     broadcastToRoom(room, {
                         type: 'room_update',
                         room: getRoomSummary(room),
                     });
                 }
+                break;
+            }
+
+            case 'add_ai': {
+                const room = rooms.get(client.roomCode);
+                if (!room || room.host !== client.id) return;
+                const aiTeam = msg.team || 'blue';
+                if (teamCount(room, aiTeam) >= MAX_TEAM_SIZE) {
+                    ws.send(JSON.stringify({ type: 'error', message: 'Team is full (max 5)' }));
+                    return;
+                }
+                const aiId = 'ai_' + generateCode();
+                const aiNum = room.players.filter(p => p.isAI).length + 1;
+                room.players.push({
+                    id: aiId,
+                    name: `AI Bot ${aiNum}`,
+                    team: aiTeam,
+                    ws: null,
+                    isAI: true,
+                });
+                broadcastToRoom(room, {
+                    type: 'room_update',
+                    room: getRoomSummary(room),
+                });
+                break;
+            }
+
+            case 'remove_ai': {
+                const room = rooms.get(client.roomCode);
+                if (!room || room.host !== client.id) return;
+                const rmTeam = msg.team || 'blue';
+                // Remove the last AI from the specified team
+                for (let i = room.players.length - 1; i >= 0; i--) {
+                    if (room.players[i].isAI && room.players[i].team === rmTeam) {
+                        room.players.splice(i, 1);
+                        break;
+                    }
+                }
+                broadcastToRoom(room, {
+                    type: 'room_update',
+                    room: getRoomSummary(room),
+                });
                 break;
             }
 
@@ -288,8 +348,10 @@ wss.on('connection', (ws) => {
             case 'start_game': {
                 const room = rooms.get(client.roomCode);
                 if (!room || room.host !== client.id) return;
-                if (room.players.length < 2) {
-                    ws.send(JSON.stringify({ type: 'error', message: 'Need at least 2 players' }));
+                const hasBlue = room.players.some(p => p.team === 'blue');
+                const hasRed = room.players.some(p => p.team === 'red');
+                if (!hasBlue || !hasRed) {
+                    ws.send(JSON.stringify({ type: 'error', message: 'Need at least 1 player on each team' }));
                     return;
                 }
                 room.state = 'playing';
