@@ -358,7 +358,15 @@ function spawnInitialPieces() {
     bluePieces = [];
     redPieces = [];
 
-    for (let i = 0; i < PIECES_PER_TEAM; i++) {
+    // Determine team sizes from room data or defaults
+    let blueCount = PIECES_PER_TEAM;
+    let redCount = PIECES_PER_TEAM;
+    if (pvpRoomData && pvpRoomData.players) {
+        blueCount = pvpRoomData.players.filter(p => p.team === 'blue').length;
+        redCount = pvpRoomData.players.filter(p => p.team === 'red').length;
+    }
+
+    for (let i = 0; i < blueCount; i++) {
         const bp = spawnPiece('blue');
         bluePieces.push(bp);
         if (i === 0) {
@@ -366,7 +374,9 @@ function spawnInitialPieces() {
             bp.isPlayerControlled = true;
             bp.speed = 5.0;
         }
+    }
 
+    for (let i = 0; i < redCount; i++) {
         const rp = spawnPiece('red');
         redPieces.push(rp);
     }
@@ -818,8 +828,30 @@ function resolveConnection(pieceA, pieceB, result) {
         redScore++;
     }
 
+    // Respawn the loser with a new shape at their team's end
     removeFighterBody(loser);
     loser.destroy();
+
+    const newFighter = spawnPiece(loser.team);
+    if (loser.team === 'blue') {
+        const idx = bluePieces.indexOf(loser);
+        if (idx !== -1) bluePieces[idx] = newFighter;
+        else bluePieces.push(newFighter);
+    } else {
+        const idx = redPieces.indexOf(loser);
+        if (idx !== -1) redPieces[idx] = newFighter;
+        else redPieces.push(newFighter);
+    }
+    createFighterBody(newFighter, false);
+
+    // If the loser was the player, switch control to the new fighter
+    if (loser === playerPiece) {
+        playerPiece = newFighter;
+        newFighter.isPlayerControlled = true;
+        newFighter.speed = 5.0;
+        promoteToPlayer(newFighter);
+    }
+
     respawnFighter(winner);
 }
 
@@ -859,13 +891,6 @@ function gameLoop() {
     // Timer
     gameTime -= dt;
     ui.updateTimer(Math.max(0, gameTime));
-
-    // Spawn reinforcements
-    spawnTimer -= dt;
-    if (spawnTimer <= 0) {
-        spawnTimer = SPAWN_INTERVAL;
-        spawnReinforcements();
-    }
 
     // Player input
     handlePlayerMovement(dt);
@@ -933,10 +958,10 @@ function gameLoop() {
         playerPiece.setHighlight(true);
     }
 
-    // Check game over — first to WIN_SCORE, time runs out, or team eliminated
+    // Check game over — first to WIN_SCORE or time runs out
     const blueArtNow = sculptureBuilder.getShapeCount('blue');
     const redArtNow = sculptureBuilder.getShapeCount('red');
-    if (gameTime <= 0 || aliveBlue === 0 || aliveRed === 0 || blueArtNow >= WIN_SCORE || redArtNow >= WIN_SCORE) {
+    if (gameTime <= 0 || blueArtNow >= WIN_SCORE || redArtNow >= WIN_SCORE) {
         endGame();
     }
 
