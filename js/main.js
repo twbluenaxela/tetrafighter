@@ -12,12 +12,14 @@ import {
 import { t, getLang, setLang, applyStaticTranslations } from './i18n.js';
 import * as lobby from './lobby.js';
 import * as net from './network.js';
+import { startHomeAnimation, stopHomeAnimation } from './home-animation.js';
 
 // Initialize Rapier WASM before anything else
 await initPhysics();
 
 // i18n: apply saved language and wire toggle
 applyStaticTranslations();
+startHomeAnimation();
 const langToggle = document.getElementById('lang-toggle');
 if (langToggle) {
     langToggle.addEventListener('click', () => {
@@ -1075,6 +1077,7 @@ function handleGameStart(opts) {
     pvpRoomData = opts.room || null;
 
     // Hide all menu screens
+    stopHomeAnimation();
     document.getElementById('start-screen').style.display = 'none';
     document.getElementById('lobby-screen').style.display = 'none';
     document.getElementById('room-screen').style.display = 'none';
@@ -1119,6 +1122,7 @@ function quitToMenu() {
     bluePieces = [];
     redPieces = [];
     document.getElementById('start-screen').style.display = 'flex';
+    startHomeAnimation();
     if (document.pointerLockElement) document.exitPointerLock();
 }
 
@@ -1160,6 +1164,7 @@ document.getElementById('btn-quit-to-menu').addEventListener('click', () => {
     bluePieces = [];
     redPieces = [];
     document.getElementById('start-screen').style.display = 'flex';
+    startHomeAnimation();
     if (document.pointerLockElement) document.exitPointerLock();
 });
 
