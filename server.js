@@ -13,7 +13,7 @@ import { dirname } from 'path';
 import crypto from 'crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 // ============================================================
 // MIME TYPES
@@ -363,6 +363,6 @@ setInterval(() => {
 // ============================================================
 // START
 // ============================================================
-httpServer.listen(PORT, () => {
-    console.log(`TetraFighter server running at http://localhost:${PORT}`);
+httpServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`TetraFighter server running on port ${PORT}`);
 });
