@@ -231,7 +231,13 @@ export function init(gameStartCallback) {
     });
 
     net.on('disconnected', () => {
-        showScreen('start');
+        // Only return to start screen if we're in the lobby/room screens
+        // Don't interrupt an active game
+        const lobbyVisible = document.getElementById('lobby-screen').style.display !== 'none';
+        const roomVisible = document.getElementById('room-screen').style.display !== 'none';
+        if (lobbyVisible || roomVisible) {
+            showScreen('start');
+        }
     });
 }
 

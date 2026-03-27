@@ -155,6 +155,10 @@ wss.on('connection', (ws) => {
     const clientId = generateCode(8);
     clients.set(ws, { id: clientId, name: 'Player', roomCode: null });
 
+    // Server-side heartbeat
+    ws.isAlive = true;
+    ws.on('pong', () => { ws.isAlive = true; });
+
     ws.send(JSON.stringify({ type: 'welcome', id: clientId }));
 
     ws.on('message', (raw) => {
@@ -169,6 +173,11 @@ wss.on('connection', (ws) => {
         if (!client) return;
 
         switch (msg.type) {
+            case 'ping': {
+                ws.send(JSON.stringify({ type: 'pong' }));
+                break;
+            }
+
             case 'set_name': {
                 client.name = (msg.name || 'Player').slice(0, 20);
                 break;
@@ -432,6 +441,20 @@ setInterval(() => {
         }
     }
 }, 60000);
+
+// WebSocket heartbeat — detect dead connections
+const heartbeatInterval = setInterval(() => {
+    for (const ws of wss.clients) {
+        if (!ws.isAlive) {
+            ws.terminate();
+            continue;
+        }
+        ws.isAlive = false;
+        ws.ping();
+    }
+}, 30000);
+
+wss.on('close', () => clearInterval(heartbeatInterval));
 
 // ============================================================
 // START

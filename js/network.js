@@ -5,6 +5,7 @@
 let ws = null;
 let myId = null;
 let messageHandlers = new Map(); // type -> [callbacks]
+let pingInterval = null;
 
 export function getMyId() { return myId; }
 
@@ -18,7 +19,16 @@ export function connect() {
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
         ws = new WebSocket(`${protocol}//${location.host}`);
 
-        ws.onopen = () => resolve();
+        ws.onopen = () => {
+            // Keepalive ping every 25s to prevent proxy timeouts
+            if (pingInterval) clearInterval(pingInterval);
+            pingInterval = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'ping' }));
+                }
+            }, 25000);
+            resolve();
+        };
         ws.onerror = () => reject(new Error('WebSocket connection failed'));
 
         ws.onmessage = (event) => {
@@ -42,6 +52,7 @@ export function connect() {
         };
 
         ws.onclose = () => {
+            if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
             const handlers = messageHandlers.get('disconnected');
             if (handlers) {
                 for (const fn of handlers) fn();
@@ -51,6 +62,7 @@ export function connect() {
 }
 
 export function disconnect() {
+    if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
     if (ws) {
         ws.close();
         ws = null;
