@@ -616,6 +616,21 @@ body {
     content: '\1F916 ';
 }
 
+.room-team li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.player-ping {
+    font-size: 11px;
+    font-family: monospace;
+    margin-left: 8px;
+}
+.ping-good { color: #4caf50; }
+.ping-ok   { color: #ff9800; }
+.ping-bad  { color: #f44336; }
+
 .team-header {
     display: flex;
     justify-content: space-between;

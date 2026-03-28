@@ -278,7 +278,20 @@ function updateRoomScreen(room, myId) {
 
     for (const p of room.players) {
         const li = document.createElement('li');
-        li.textContent = p.name;
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = p.name;
+        li.appendChild(nameSpan);
+
+        // Show ping for human players
+        if (!p.isAI && p.ping !== undefined) {
+            const pingSpan = document.createElement('span');
+            pingSpan.className = 'player-ping';
+            const ms = p.ping;
+            pingSpan.textContent = `${ms}ms`;
+            pingSpan.classList.add(ms < 80 ? 'ping-good' : ms < 150 ? 'ping-ok' : 'ping-bad');
+            li.appendChild(pingSpan);
+        }
+
         if (p.isAI) li.classList.add('is-ai');
         if (p.id === room.host) li.classList.add('is-host');
         if (p.id === myId) li.classList.add('is-you');

@@ -6,8 +6,11 @@ let ws = null;
 let myId = null;
 let messageHandlers = new Map(); // type -> [callbacks]
 let pingInterval = null;
+let pingSentAt = 0;
+let latencyMs = 0;
 
 export function getMyId() { return myId; }
+export function getLatency() { return latencyMs; }
 
 export function connect() {
     return new Promise((resolve, reject) => {
@@ -20,13 +23,17 @@ export function connect() {
         ws = new WebSocket(`${protocol}//${location.host}`);
 
         ws.onopen = () => {
-            // Keepalive ping every 25s to prevent proxy timeouts
+            // Keepalive ping every 5s — also measures latency
             if (pingInterval) clearInterval(pingInterval);
             pingInterval = setInterval(() => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
+                    pingSentAt = performance.now();
                     ws.send(JSON.stringify({ type: 'ping' }));
                 }
-            }, 25000);
+            }, 5000);
+            // Send initial ping immediately
+            pingSentAt = performance.now();
+            ws.send(JSON.stringify({ type: 'ping' }));
             resolve();
         };
         ws.onerror = () => reject(new Error('WebSocket connection failed'));
@@ -37,6 +44,11 @@ export function connect() {
 
             if (msg.type === 'welcome') {
                 myId = msg.id;
+            }
+            if (msg.type === 'pong' && pingSentAt) {
+                latencyMs = Math.round(performance.now() - pingSentAt);
+                // Report our ping to the server so other players can see it
+                send({ type: 'report_ping', ping: latencyMs });
             }
 
             const handlers = messageHandlers.get(msg.type);
@@ -105,6 +117,7 @@ export function addAI(team) { send({ type: 'add_ai', team }); }
 export function removeAI(team) { send({ type: 'remove_ai', team }); }
 export function sendGameState(state) { send({ type: 'game_state', state }); }
 export function sendGameEvent(event) { send({ type: 'game_event', event }); }
+export function sendPlayerInput(input) { send({ type: 'player_input', input }); }
 
 export function isConnected() {
     return ws && ws.readyState === WebSocket.OPEN;

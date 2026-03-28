@@ -92,6 +92,7 @@ function getRoomSummary(room) {
             name: p.name,
             team: p.team,
             isAI: p.isAI || false,
+            ping: p.ping || 0,
         })),
     };
 }
@@ -153,7 +154,7 @@ const wss = new WebSocketServer({ server: httpServer });
 
 wss.on('connection', (ws) => {
     const clientId = generateCode(8);
-    clients.set(ws, { id: clientId, name: 'Player', roomCode: null });
+    clients.set(ws, { id: clientId, name: 'Player', roomCode: null, ping: 0 });
 
     // Server-side heartbeat
     ws.isAlive = true;
@@ -183,6 +184,21 @@ wss.on('connection', (ws) => {
                 break;
             }
 
+            case 'report_ping': {
+                client.ping = msg.ping || 0;
+                // Update ping in any room this client is in
+                const room = rooms.get(client.roomCode);
+                if (room) {
+                    const player = room.players.find(p => p.id === client.id);
+                    if (player) player.ping = client.ping;
+                    broadcastToRoom(room, {
+                        type: 'room_update',
+                        room: getRoomSummary(room),
+                    });
+                }
+                break;
+            }
+
             case 'create_room': {
                 // Leave any existing room
                 removePlayerFromRoom(client.id);
@@ -195,7 +211,7 @@ wss.on('connection', (ws) => {
                 });
 
                 const team = msg.team || 'blue';
-                room.players.push({ id: client.id, name: client.name, team, ws });
+                room.players.push({ id: client.id, name: client.name, team, ws, ping: client.ping });
                 client.roomCode = room.code;
 
                 ws.send(JSON.stringify({
@@ -229,7 +245,7 @@ wss.on('connection', (ws) => {
                     ws.send(JSON.stringify({ type: 'error', message: 'Team is full (max 5)' }));
                     return;
                 }
-                room.players.push({ id: client.id, name: client.name, team, ws });
+                room.players.push({ id: client.id, name: client.name, team, ws, ping: client.ping });
                 client.roomCode = room.code;
 
                 ws.send(JSON.stringify({
@@ -262,7 +278,7 @@ wss.on('connection', (ws) => {
                 const redCount = room.players.filter(p => p.team === 'red').length;
                 const team = blueCount <= redCount ? 'blue' : 'red';
 
-                room.players.push({ id: client.id, name: client.name, team, ws });
+                room.players.push({ id: client.id, name: client.name, team, ws, ping: client.ping });
                 client.roomCode = room.code;
 
                 ws.send(JSON.stringify({
@@ -384,14 +400,29 @@ wss.on('connection', (ws) => {
 
             // === GAME STATE RELAY ===
             case 'game_state': {
-                // Relay player's state to all others in room
+                // Host broadcasts full game state to all others in room
                 const room = rooms.get(client.roomCode);
                 if (!room || room.state !== 'playing') return;
                 broadcastToRoom(room, {
-                    type: 'player_state',
-                    id: client.id,
+                    type: 'host_state',
                     state: msg.state,
                 }, ws);
+                break;
+            }
+
+            case 'player_input': {
+                // Guest sends input to host
+                const room = rooms.get(client.roomCode);
+                if (!room || room.state !== 'playing') return;
+                // Find the host's ws and send directly
+                const hostPlayer = room.players.find(p => p.id === room.host);
+                if (hostPlayer && hostPlayer.ws && hostPlayer.ws.readyState === 1) {
+                    hostPlayer.ws.send(JSON.stringify({
+                        type: 'player_input',
+                        playerId: client.id,
+                        input: msg.input,
+                    }));
+                }
                 break;
             }
 

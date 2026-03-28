@@ -341,6 +341,14 @@ let showcaseMode = false;
 let showcaseTimer = 0;
 let showcaseTeam = 'blue';
 
+// Multiplayer state
+let isHost = true;           // true for PvE, true for PvP host, false for PvP guest
+let playerIdToFighter = {};  // maps playerId -> fighter reference (for remote players on host)
+let myPlayerId = null;       // our network ID
+let remoteInputs = {};       // playerId -> { vx, vz, sprint, facing, rotate }
+let netSendTimer = 0;
+const NET_SEND_INTERVAL = 1 / 15; // broadcast at 15fps
+
 // Input state
 const keys = {};
 let cameraAngle = 0;
@@ -360,19 +368,41 @@ function spawnPiece(team) {
 function spawnInitialPieces() {
     bluePieces = [];
     redPieces = [];
+    playerIdToFighter = {};
+    remoteInputs = {};
 
     // Determine team sizes from room data or defaults
     let blueCount = PIECES_PER_TEAM;
     let redCount = PIECES_PER_TEAM;
+
+    let bluePlayers = []; // { id, isAI } — ordered list for assignment
+    let redPlayers = [];
+
     if (pvpRoomData && pvpRoomData.players) {
-        blueCount = pvpRoomData.players.filter(p => p.team === 'blue').length;
-        redCount = pvpRoomData.players.filter(p => p.team === 'red').length;
+        bluePlayers = pvpRoomData.players.filter(p => p.team === 'blue');
+        redPlayers = pvpRoomData.players.filter(p => p.team === 'red');
+        blueCount = bluePlayers.length;
+        redCount = redPlayers.length;
     }
 
     for (let i = 0; i < blueCount; i++) {
         const bp = spawnPiece('blue');
         bluePieces.push(bp);
-        if (i === 0) {
+
+        const playerInfo = bluePlayers[i];
+        if (playerInfo && !playerInfo.isAI && playerInfo.id === myPlayerId) {
+            // This is our fighter
+            playerPiece = bp;
+            bp.isPlayerControlled = true;
+            bp.speed = 5.0;
+        } else if (playerInfo && !playerInfo.isAI && isHost) {
+            // Remote human player on host — controlled via network input
+            bp.isPlayerControlled = true; // not AI-driven
+            bp.isRemotePlayer = true;
+            bp.speed = 5.0;
+            playerIdToFighter[playerInfo.id] = bp;
+        } else if (!playerInfo && i === 0 && gameMode === 'pve') {
+            // PvE fallback — first blue is player
             playerPiece = bp;
             bp.isPlayerControlled = true;
             bp.speed = 5.0;
@@ -382,6 +412,18 @@ function spawnInitialPieces() {
     for (let i = 0; i < redCount; i++) {
         const rp = spawnPiece('red');
         redPieces.push(rp);
+
+        const playerInfo = redPlayers[i];
+        if (playerInfo && !playerInfo.isAI && playerInfo.id === myPlayerId) {
+            playerPiece = rp;
+            rp.isPlayerControlled = true;
+            rp.speed = 5.0;
+        } else if (playerInfo && !playerInfo.isAI && isHost) {
+            rp.isPlayerControlled = true;
+            rp.isRemotePlayer = true;
+            rp.speed = 5.0;
+            playerIdToFighter[playerInfo.id] = rp;
+        }
     }
 }
 
@@ -831,6 +873,11 @@ function resolveConnection(pieceA, pieceB, result) {
         redScore++;
     }
 
+    // Broadcast kill event so guests can play effects
+    if (gameMode === 'pvp' && isHost) {
+        net.sendGameEvent({ type: 'connection_kill', team: winner.team });
+    }
+
     // Respawn the loser with a new shape at their team's end
     removeFighterBody(loser);
     loser.destroy();
@@ -857,6 +904,232 @@ function resolveConnection(pieceA, pieceB, result) {
 
     respawnFighter(winner);
 }
+
+// ============================================================
+// MULTIPLAYER NETWORKING
+// ============================================================
+
+// Host: collect state from all fighters and broadcast
+function broadcastGameState() {
+    const fighters = [];
+    const allPieces = [...bluePieces, ...redPieces];
+    for (let i = 0; i < allPieces.length; i++) {
+        const f = allPieces[i];
+        fighters.push({
+            idx: i,
+            x: Math.round(f.position.x * 100) / 100,
+            z: Math.round(f.position.z * 100) / 100,
+            ry: Math.round(f.group.rotation.y * 100) / 100,
+            alive: f.alive,
+            team: f.team,
+            shape: f.shapeKey,
+            run: f.isRunning,
+            sprint: f.isSprinting,
+        });
+    }
+    net.sendGameState({
+        fighters,
+        blueScore,
+        redScore,
+        gameTime: Math.round(gameTime * 10) / 10,
+        blueArt: sculptureBuilder.getShapeCount('blue'),
+        redArt: sculptureBuilder.getShapeCount('red'),
+    });
+}
+
+// Host: apply remote player inputs
+function applyRemoteInputs(dt) {
+    for (const [playerId, input] of Object.entries(remoteInputs)) {
+        const fighter = playerIdToFighter[playerId];
+        if (!fighter || !fighter.alive) continue;
+
+        if (input.rotate) {
+            fighter.rotateBody(input.rotate);
+            input.rotate = 0;
+        }
+
+        const speed = input.sprint ? SPRINT_SPEED : WALK_SPEED;
+        if (Math.abs(input.vx) > 0.01 || Math.abs(input.vz) > 0.01) {
+            const len = Math.sqrt(input.vx * input.vx + input.vz * input.vz);
+            const nx = input.vx / len;
+            const nz = input.vz / len;
+            fighter.velocity.set(nx * speed, 0, nz * speed);
+            setFighterVelocity(fighter, nx * speed, nz * speed);
+            fighter.desiredFacing = Math.atan2(nx, nz);
+            fighter.group.rotation.y = fighter.desiredFacing;
+            fighter.isRunning = true;
+            fighter.isSprinting = input.sprint;
+        } else {
+            fighter.velocity.set(0, 0, 0);
+            setFighterVelocity(fighter, 0, 0);
+            fighter.isRunning = false;
+            fighter.isSprinting = false;
+        }
+    }
+}
+
+// Guest: send our local input to host
+function sendLocalInput() {
+    if (!playerPiece || !playerPiece.alive) {
+        net.sendPlayerInput({ vx: 0, vz: 0, sprint: false });
+        return;
+    }
+
+    const forward = getScreenForward();
+    const right = getScreenRight();
+    const moveDir = new THREE.Vector3();
+
+    if (keys['KeyW']) moveDir.add(forward);
+    if (keys['KeyS']) moveDir.sub(forward);
+    if (keys['KeyA']) moveDir.sub(right);
+    if (keys['KeyD']) moveDir.add(right);
+
+    if (isMobile && (Math.abs(joystickX) > 0.1 || Math.abs(joystickY) > 0.1)) {
+        moveDir.add(right.clone().multiplyScalar(joystickX));
+        moveDir.sub(forward.clone().multiplyScalar(joystickY));
+    }
+
+    if (moveDir.length() > 0) moveDir.normalize();
+
+    const sprint = keys['ShiftLeft'] || keys['ShiftRight'] || mobileSprint;
+
+    net.sendPlayerInput({
+        vx: Math.round(moveDir.x * 100) / 100,
+        vz: Math.round(moveDir.z * 100) / 100,
+        sprint,
+    });
+}
+
+// Guest: apply full state received from host
+function applyHostState(state) {
+    if (!gameRunning) return;
+
+    // Update scores and timer
+    blueScore = state.blueScore;
+    redScore = state.redScore;
+    gameTime = state.gameTime;
+
+    // Update fighter positions
+    const allPieces = [...bluePieces, ...redPieces];
+    for (const fd of state.fighters) {
+        const fighter = allPieces[fd.idx];
+        if (!fighter) continue;
+
+        // Smoothly interpolate position
+        fighter.group.position.x += (fd.x - fighter.group.position.x) * 0.3;
+        fighter.group.position.z += (fd.z - fighter.group.position.z) * 0.3;
+        fighter.group.rotation.y = fd.ry;
+        fighter.isRunning = fd.run;
+        fighter.isSprinting = fd.sprint;
+
+        // Handle death/respawn
+        if (!fd.alive && fighter.alive) {
+            // Fighter just died on host — play effects locally
+            ui.flashScreen();
+            playConnectionClick();
+            fighter.alive = false;
+        } else if (fd.alive && !fighter.alive) {
+            // Fighter respawned on host — recreate locally
+            fighter.alive = true;
+        }
+
+        // If shape changed (respawn), rebuild visual
+        if (fd.shape !== fighter.shapeKey && fd.alive) {
+            // Destroy and recreate fighter at this index
+            const team = fd.team;
+            const newFighter = spawnPiece(team);
+            newFighter.group.position.set(fd.x, 0, fd.z);
+            newFighter.group.rotation.y = fd.ry;
+
+            if (team === 'blue') {
+                const arrIdx = bluePieces.indexOf(fighter);
+                if (arrIdx !== -1) {
+                    fighter.destroy();
+                    bluePieces[arrIdx] = newFighter;
+                    // Re-check if this was our player piece
+                    if (fighter === playerPiece) {
+                        playerPiece = newFighter;
+                        newFighter.isPlayerControlled = true;
+                        newFighter.speed = 5.0;
+                    }
+                }
+            } else {
+                const arrIdx = redPieces.indexOf(fighter);
+                if (arrIdx !== -1) {
+                    fighter.destroy();
+                    redPieces[arrIdx] = newFighter;
+                    if (fighter === playerPiece) {
+                        playerPiece = newFighter;
+                        newFighter.isPlayerControlled = true;
+                        newFighter.speed = 5.0;
+                    }
+                }
+            }
+        }
+    }
+
+    // Update HUD
+    ui.updateTimer(Math.max(0, gameTime));
+    ui.updateScores(blueScore, redScore);
+    ui.updatePieceCounts(
+        bluePieces.filter(p => p.alive).length,
+        redPieces.filter(p => p.alive).length
+    );
+    ui.updateArtCounts(state.blueArt, state.redArt);
+
+    // Check game over (mirror host's check)
+    if (gameTime <= 0 || state.blueArt >= WIN_SCORE || state.redArt >= WIN_SCORE) {
+        endGame();
+    }
+}
+
+// Set up network listeners for multiplayer
+function setupNetworkListeners() {
+    // Host receives input from remote players
+    net.on('player_input', (msg) => {
+        if (!isHost || !gameRunning) return;
+        remoteInputs[msg.playerId] = msg.input;
+    });
+
+    // Guest receives game state from host
+    net.on('host_state', (msg) => {
+        if (isHost || !gameRunning) return;
+        applyHostState(msg.state);
+    });
+
+    // Handle game events (connection kills, etc.)
+    net.on('game_event', (msg) => {
+        if (!gameRunning) return;
+        if (msg.event.type === 'connection_kill') {
+            ui.flashScreen();
+            playConnectionClick();
+        }
+    });
+}
+setupNetworkListeners();
+
+// Handle rotation from guest
+function setupGuestRotationListener() {
+    // Guest sends rotation as a game event since it's an instant action
+    window.addEventListener('keydown', (e) => {
+        if (!gameRunning || isHost || !playerPiece || !playerPiece.alive) return;
+        if (e.code === 'KeyQ' || e.code === 'KeyE') {
+            const dir = e.code === 'KeyQ' ? -1 : 1;
+            net.sendGameEvent({ type: 'rotate', dir });
+        }
+    });
+
+    net.on('game_event', (msg) => {
+        if (!isHost || !gameRunning) return;
+        if (msg.event.type === 'rotate' && msg.id) {
+            const fighter = playerIdToFighter[msg.id];
+            if (fighter && fighter.alive) {
+                fighter.rotateBody(msg.event.dir);
+            }
+        }
+    });
+}
+setupGuestRotationListener();
 
 // ============================================================
 // GAME LOOP
@@ -896,64 +1169,111 @@ function gameLoop() {
         return;
     }
 
-    // Timer
-    gameTime -= dt;
-    ui.updateTimer(Math.max(0, gameTime));
+    if (isHost) {
+        // ===== HOST: runs full simulation =====
 
-    // Player input
-    handlePlayerMovement(dt);
+        // Timer
+        gameTime -= dt;
+        ui.updateTimer(Math.max(0, gameTime));
 
-    // Reassign player piece if current one died
-    if (playerPiece && !playerPiece.alive) {
-        const alivePieces = bluePieces.filter(p => p.alive);
-        if (alivePieces.length > 0) {
-            playerPiece = alivePieces[0];
-            playerPiece.isPlayerControlled = true;
-            playerPiece.speed = 5.0;
-            promoteToPlayer(playerPiece);
-            ui.notify(t('switchedFighter'));
-        } else {
-            playerPiece = null;
+        // Player input (local)
+        handlePlayerMovement(dt);
+
+        // Apply remote player inputs from network
+        if (gameMode === 'pvp') {
+            applyRemoteInputs(dt);
         }
+
+        // Reassign player piece if current one died
+        if (playerPiece && !playerPiece.alive) {
+            const myTeam = playerPiece.team;
+            const alivePieces = (myTeam === 'blue' ? bluePieces : redPieces)
+                .filter(p => p.alive && !p.isRemotePlayer);
+            if (alivePieces.length > 0) {
+                playerPiece = alivePieces[0];
+                playerPiece.isPlayerControlled = true;
+                playerPiece.speed = 5.0;
+                promoteToPlayer(playerPiece);
+                ui.notify(t('switchedFighter'));
+            } else {
+                playerPiece = null;
+            }
+        }
+
+        // AI — exclude both local player and remote human players
+        const blueAIPieces = bluePieces.filter(p => p.alive && p !== playerPiece && !p.isRemotePlayer);
+        blueAI.update(dt, blueAIPieces, redPieces.filter(p => p.alive));
+        const redAIPieces = redPieces.filter(p => p.alive && p !== playerPiece && !p.isRemotePlayer);
+        redAI.update(dt, redAIPieces, bluePieces.filter(p => p.alive));
+
+        // Update all fighters (AI movement + animation)
+        [...bluePieces, ...redPieces].forEach(p => p.update(dt, FIELD_BOUNDS));
+
+        // Apply AI velocities to Rapier + handle rotation rebuilds
+        [...bluePieces, ...redPieces].forEach(p => {
+            if (!p.alive || !hasBody(p)) return;
+            if (!p.isPlayerControlled) {
+                setFighterVelocity(p, p.velocity.x, p.velocity.z);
+            }
+            if (p.justRotated) {
+                rebuildColliders(p);
+                p.justRotated = false;
+            }
+        });
+
+        // Rapier physics step
+        stepAndSync(dt);
+
+        // Connection check — if shapes fit together on contact, one dies
+        checkHitboxCollisions();
+
+        // Broadcast state to guests
+        if (gameMode === 'pvp') {
+            netSendTimer -= dt;
+            if (netSendTimer <= 0) {
+                broadcastGameState();
+                netSendTimer = NET_SEND_INTERVAL;
+            }
+        }
+
+        // Update HUD
+        const aliveBlue = bluePieces.filter(p => p.alive).length;
+        const aliveRed = redPieces.filter(p => p.alive).length;
+        ui.updateScores(blueScore, redScore);
+        ui.updatePieceCounts(aliveBlue, aliveRed);
+        ui.updateArtCounts(
+            sculptureBuilder.getShapeCount('blue'),
+            sculptureBuilder.getShapeCount('red')
+        );
+
+        // Check game over — first to WIN_SCORE or time runs out
+        const blueArtNow = sculptureBuilder.getShapeCount('blue');
+        const redArtNow = sculptureBuilder.getShapeCount('red');
+        if (gameTime <= 0 || blueArtNow >= WIN_SCORE || redArtNow >= WIN_SCORE) {
+            endGame();
+            if (gameMode === 'pvp') {
+                net.sendGameEvent({
+                    type: 'game_over',
+                    blueArt: blueArtNow,
+                    redArt: redArtNow,
+                });
+            }
+        }
+    } else {
+        // ===== GUEST: render-only, state comes from host =====
+
+        // Send our input to host
+        netSendTimer -= dt;
+        if (netSendTimer <= 0) {
+            sendLocalInput();
+            netSendTimer = NET_SEND_INTERVAL;
+        }
+
+        // Animate fighters locally (just leg/arm animation, no position changes)
+        [...bluePieces, ...redPieces].forEach(p => p.update(dt, FIELD_BOUNDS));
     }
 
-    // AI
-    const blueAIPieces = bluePieces.filter(p => p.alive && p !== playerPiece);
-    blueAI.update(dt, blueAIPieces, redPieces.filter(p => p.alive));
-    redAI.update(dt, redPieces.filter(p => p.alive), bluePieces.filter(p => p.alive));
-
-    // Update all fighters (AI movement + animation)
-    [...bluePieces, ...redPieces].forEach(p => p.update(dt, FIELD_BOUNDS));
-
-    // Apply AI velocities to Rapier + handle rotation rebuilds
-    [...bluePieces, ...redPieces].forEach(p => {
-        if (!p.alive || !hasBody(p)) return;
-        if (!p.isPlayerControlled) {
-            setFighterVelocity(p, p.velocity.x, p.velocity.z);
-        }
-        if (p.justRotated) {
-            rebuildColliders(p);
-            p.justRotated = false;
-        }
-    });
-
-    // Rapier physics step — colliders sweep during rotation, solver handles all push forces
-    stepAndSync(dt);
-
-    // Connection check — if shapes fit together on contact, one dies
-    checkHitboxCollisions();
-
-    // Update HUD
-    const aliveBlue = bluePieces.filter(p => p.alive).length;
-    const aliveRed = redPieces.filter(p => p.alive).length;
-    ui.updateScores(blueScore, redScore);
-    ui.updatePieceCounts(aliveBlue, aliveRed);
-    ui.updateArtCounts(
-        sculptureBuilder.getShapeCount('blue'),
-        sculptureBuilder.getShapeCount('red')
-    );
-
-    // Minimap
+    // Minimap (both host and guest)
     ui.updateMinimap(
         bluePieces.filter(p => p.alive),
         redPieces.filter(p => p.alive),
@@ -964,13 +1284,6 @@ function gameLoop() {
     // Highlight player
     if (playerPiece && playerPiece.alive) {
         playerPiece.setHighlight(true);
-    }
-
-    // Check game over — first to WIN_SCORE or time runs out
-    const blueArtNow = sculptureBuilder.getShapeCount('blue');
-    const redArtNow = sculptureBuilder.getShapeCount('red');
-    if (gameTime <= 0 || blueArtNow >= WIN_SCORE || redArtNow >= WIN_SCORE) {
-        endGame();
     }
 
     // Camera
@@ -992,9 +1305,11 @@ function startGame() {
     scene.remove(sculptureBuilder.getSculpture('blue'));
     scene.remove(sculptureBuilder.getSculpture('red'));
 
-    // Reset physics world and create boundaries
-    resetWorld();
-    createBoundaries(FIELD_BOUNDS);
+    // Reset physics world and create boundaries (host only)
+    if (isHost) {
+        resetWorld();
+        createBoundaries(FIELD_BOUNDS);
+    }
 
     gameRunning = true;
     showcaseMode = false;
@@ -1004,16 +1319,19 @@ function startGame() {
     redScore = 0;
     spawnTimer = SPAWN_INTERVAL;
     cameraAngle = 0;
+    netSendTimer = 0;
 
     // Fresh sculpture builder
     sculptureBuilder = new SculptureBuilder(scene, FIELD_BOUNDS);
 
     spawnInitialPieces();
 
-    // Create Rapier bodies for all fighters
-    [...bluePieces, ...redPieces].forEach(p => {
-        createFighterBody(p, p === playerPiece);
-    });
+    // Create Rapier bodies for all fighters (host only — guests just render)
+    if (isHost) {
+        [...bluePieces, ...redPieces].forEach(p => {
+            createFighterBody(p, p === playerPiece);
+        });
+    }
 
     // Hide all menu screens
     document.getElementById('start-screen').style.display = 'none';
@@ -1075,6 +1393,16 @@ let pvpRoomData = null;
 function handleGameStart(opts) {
     gameMode = opts.mode;
     pvpRoomData = opts.room || null;
+
+    // Determine host/guest role
+    if (opts.mode === 'pvp' && opts.myId) {
+        myPlayerId = opts.myId;
+        isHost = pvpRoomData && pvpRoomData.host === myPlayerId;
+    } else {
+        // PvE — always host
+        myPlayerId = null;
+        isHost = true;
+    }
 
     // Hide all menu screens
     stopHomeAnimation();
