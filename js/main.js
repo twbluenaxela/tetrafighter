@@ -554,6 +554,14 @@ if (isMobile) {
     };
     joystickZone.addEventListener('touchend', endJoystick);
     joystickZone.addEventListener('touchcancel', endJoystick);
+    // Fallback: reset joystick if focus is lost (incoming call, app switch, etc.)
+    window.addEventListener('blur', () => {
+        joystickTouchId = null;
+        joystickX = 0;
+        joystickY = 0;
+        joystickActive = false;
+        joystickKnob.style.transform = 'translate(0px, 0px)';
+    });
 
     function updateJoystick(touch) {
         const rect = joystickZone.getBoundingClientRect();
@@ -575,13 +583,21 @@ if (isMobile) {
     btnRotateCCW.addEventListener('touchstart', (e) => {
         e.preventDefault();
         if (gameRunning && playerPiece && playerPiece.alive) {
-            playerPiece.rotateBody(-1);
+            if (isHost) {
+                playerPiece.rotateBody(-1);
+            } else {
+                net.sendGameEvent({ type: 'rotate', dir: -1 });
+            }
         }
     });
     btnRotateCW.addEventListener('touchstart', (e) => {
         e.preventDefault();
         if (gameRunning && playerPiece && playerPiece.alive) {
-            playerPiece.rotateBody(1);
+            if (isHost) {
+                playerPiece.rotateBody(1);
+            } else {
+                net.sendGameEvent({ type: 'rotate', dir: 1 });
+            }
         }
     });
 
@@ -1270,7 +1286,7 @@ function gameLoop() {
         }
 
         // Animate fighters locally (just leg/arm animation, no position changes)
-        [...bluePieces, ...redPieces].forEach(p => p.update(dt, FIELD_BOUNDS));
+        [...bluePieces, ...redPieces].forEach(p => p.update(dt, FIELD_BOUNDS, true));
     }
 
     // Minimap (both host and guest)

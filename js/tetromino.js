@@ -222,7 +222,7 @@ export class TetraFighter {
         return this.group.position;
     }
 
-    update(dt, fieldBounds) {
+    update(dt, fieldBounds, localOnly = false) {
         if (!this.alive) return;
 
         // Animation
@@ -276,6 +276,9 @@ export class TetraFighter {
             );
             return;
         }
+
+        // Guest render-only: skip AI simulation, position comes from host state
+        if (localOnly) return;
 
         // AI movement — seek target enemy, not just march forward
         this.isRunning = true;
