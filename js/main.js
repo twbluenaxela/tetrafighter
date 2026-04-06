@@ -348,6 +348,8 @@ let myPlayerId = null;       // our network ID
 let remoteInputs = {};       // playerId -> { vx, vz, sprint, facing, rotate }
 let netSendTimer = 0;
 const NET_SEND_INTERVAL = 1 / 15; // broadcast at 15fps
+let lastHostStateTime = 0;        // guest: timestamp of last received host state
+const HOST_TIMEOUT = 15;          // seconds without host state before auto-disconnect
 
 // Input state
 const keys = {};
@@ -1112,6 +1114,24 @@ function applyHostState(state) {
     }
 }
 
+// Cleanly exit a multiplayer game back to menu with a reason shown to the player
+function disconnectToMenu(reason) {
+    if (!gameRunning) return;
+    gameRunning = false;
+    showcaseMode = false;
+    paused = false;
+    ui.hideHUD();
+    ui.hideGameOver();
+    document.getElementById('pause-menu').style.display = 'none';
+    [...bluePieces, ...redPieces].forEach(p => { if (p.alive) p.destroy(); });
+    bluePieces = [];
+    redPieces = [];
+    document.getElementById('start-screen').style.display = 'flex';
+    startHomeAnimation();
+    if (document.pointerLockElement) document.exitPointerLock();
+    ui.notify(reason);
+}
+
 // Set up network listeners for multiplayer
 function setupNetworkListeners() {
     // Host receives input from remote players
@@ -1123,6 +1143,7 @@ function setupNetworkListeners() {
     // Guest receives game state from host
     net.on('host_state', (msg) => {
         if (isHost || !gameRunning) return;
+        lastHostStateTime = performance.now();
         applyHostState(msg.state);
     });
 
@@ -1132,6 +1153,16 @@ function setupNetworkListeners() {
         if (msg.event.type === 'connection_kill') {
             ui.flashScreen();
             playConnectionClick();
+        }
+        if (msg.event.type === 'host_left') {
+            disconnectToMenu(t('hostDisconnected'));
+        }
+    });
+
+    // Handle WebSocket disconnection during active game
+    net.on('disconnected', () => {
+        if (gameRunning && gameMode === 'pvp') {
+            disconnectToMenu(t('connectionLost'));
         }
     });
 }
@@ -1291,6 +1322,12 @@ function gameLoop() {
     } else {
         // ===== GUEST: render-only, state comes from host =====
 
+        // Check for host timeout
+        if (lastHostStateTime > 0 && (performance.now() - lastHostStateTime) / 1000 > HOST_TIMEOUT) {
+            disconnectToMenu(t('hostDisconnected'));
+            return;
+        }
+
         // Send our input to host
         netSendTimer -= dt;
         if (netSendTimer <= 0) {
@@ -1349,6 +1386,7 @@ function startGame() {
     spawnTimer = SPAWN_INTERVAL;
     cameraAngle = 0;
     netSendTimer = 0;
+    lastHostStateTime = 0;
 
     // Fresh sculpture builder
     sculptureBuilder = new SculptureBuilder(scene, FIELD_BOUNDS);
@@ -1470,6 +1508,11 @@ function hidePauseMenu() {
 
 function quitToMenu() {
     hidePauseMenu();
+    // Notify other players and leave room if in multiplayer
+    if (gameMode === 'pvp' && gameRunning) {
+        net.sendGameEvent({ type: 'host_left' });
+        net.leaveRoom();
+    }
     gameRunning = false;
     showcaseMode = false;
     ui.hideHUD();
@@ -1514,6 +1557,11 @@ document.getElementById('btn-rematch').addEventListener('click', () => {
     }
 });
 document.getElementById('btn-quit-to-menu').addEventListener('click', () => {
+    // Notify other players and leave room if in multiplayer
+    if (gameMode === 'pvp') {
+        net.sendGameEvent({ type: 'host_left' });
+        net.leaveRoom();
+    }
     ui.hideGameOver();
     showcaseMode = false;
     // Clean up pieces

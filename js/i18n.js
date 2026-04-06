@@ -62,6 +62,8 @@ const translations = {
         quitToMenu: 'QUIT TO MENU',
         rematch: 'REMATCH',
         waitingForHost: 'Waiting for host...',
+        hostDisconnected: 'Host left the game',
+        connectionLost: 'Connection lost',
     },
     'zh-TW': {
         title: 'TETRAFIGHTER',
@@ -124,6 +126,8 @@ const translations = {
         quitToMenu: '退出至選單',
         rematch: '再來一局',
         waitingForHost: '等待房主決定⋯',
+        hostDisconnected: '房主已離開遊戲',
+        connectionLost: '連線中斷',
     },
 };
 
