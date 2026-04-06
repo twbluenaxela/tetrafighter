@@ -918,6 +918,19 @@ function resolveConnection(pieceA, pieceB, result) {
         promoteToPlayer(newFighter);
     }
 
+    // If the loser was a remote player, preserve their flags and mapping
+    if (loser.isRemotePlayer) {
+        newFighter.isPlayerControlled = true;
+        newFighter.isRemotePlayer = true;
+        newFighter.speed = 5.0;
+        for (const [id, f] of Object.entries(playerIdToFighter)) {
+            if (f === loser) {
+                playerIdToFighter[id] = newFighter;
+                break;
+            }
+        }
+    }
+
     respawnFighter(winner);
 }
 
